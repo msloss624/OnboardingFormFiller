@@ -8,7 +8,15 @@ interface Props {
 }
 
 export default function TranscriptCheckbox({ transcript, checked, onChange, previousSources = [] }: Props) {
-  const dateStr = transcript.date ? String(transcript.date).slice(0, 10) : 'N/A';
+  let dateStr = 'N/A';
+  if (transcript.date) {
+    const d = typeof transcript.date === 'number'
+      ? new Date(transcript.date)
+      : new Date(transcript.date);
+    if (!isNaN(d.getTime())) {
+      dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  }
   const wasPrevious = previousSources.some((s) => s.includes(transcript.title));
 
   return (

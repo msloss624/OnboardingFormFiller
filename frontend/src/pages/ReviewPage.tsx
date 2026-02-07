@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getRun, updateAnswers, getExcelUrl, retryField, type Run, type Answer } from '../api/client';
 import AnswerEditor from '../components/AnswerEditor';
 
-// RFI field categories in display order
+// Field categories in display order
 const CATEGORIES = [
   'Engagement & Project Details',
   'Company Overview',
@@ -121,8 +121,8 @@ export default function ReviewPage() {
         {[
           { label: 'Total', value: total, sub: '' },
           { label: 'Filled', value: filled, sub: `${total ? Math.round((filled / total) * 100) : 0}%` },
-          { label: 'High', value: high, sub: '' },
-          { label: 'Medium', value: medium, sub: '' },
+          { label: 'High Confidence', value: high, sub: '' },
+          { label: 'Medium Confidence', value: medium, sub: '' },
           { label: 'Missing', value: missing, sub: '' },
         ].map((s) => (
           <div key={s.label} className="rounded-lg bg-gray-50 p-3 text-center">
@@ -174,6 +174,19 @@ export default function ReviewPage() {
 
       {/* Actions */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3 justify-end">
+        <button
+          onClick={() =>
+            navigate('/gather', {
+              state: {
+                deal: { id: run.deal_id, name: run.deal_name, stage: '', amount: null, close_date: null },
+                baselineRunId: run.id,
+              },
+            })
+          }
+          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Re-run with more data
+        </button>
         <button
           onClick={handleSave}
           disabled={saving}

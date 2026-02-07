@@ -28,6 +28,17 @@ TEMPLATE_PATH = Path(__file__).parent.parent.parent / "templates" / "rfi_templat
 logger = logging.getLogger(__name__)
 
 
+def _format_date(value: str | None) -> str | None:
+    """Format a date string (e.g. '2026-03-15T00:00:00.000Z') to 'March 15, 2026'."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt.strftime("%B %d, %Y").replace(" 0", " ")
+    except (ValueError, AttributeError):
+        return value
+
+
 def _answer_to_dict(a: ExtractedAnswer) -> dict:
     return {
         "field_key": a.field_key,
@@ -146,7 +157,7 @@ async def _do_extraction(
                 "main_contact_email": primary_contact.email if primary_contact else None,
                 "main_contact_phone": primary_contact.phone if primary_contact else None,
                 "deal_owner": context.get("deal_owner"),
-                "closedate": context.get("close_date"),
+                "closedate": _format_date(context.get("close_date")),
             }
 
         merged = merge_answers(all_answers, hubspot_data)

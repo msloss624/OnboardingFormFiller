@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { searchDeals, listRuns, type Deal, type RunSummary } from '../api/client';
+import { searchDeals, listRuns, deleteRun, type Deal, type RunSummary } from '../api/client';
 import DealCard from '../components/DealCard';
 
 export default function SearchPage() {
@@ -79,14 +79,26 @@ export default function SearchPage() {
                     {run.stats && <> &middot; {run.stats.completion_pct}% complete</>}
                   </p>
                 </div>
-                {run.status === 'completed' && (
+                <div className="flex gap-3">
+                  {run.status === 'completed' && (
+                    <button
+                      onClick={() => navigate(`/review/${run.id}`)}
+                      className="text-sm text-[#1E4488] hover:underline"
+                    >
+                      View
+                    </button>
+                  )}
                   <button
-                    onClick={() => navigate(`/review/${run.id}`)}
-                    className="text-sm text-[#1E4488] hover:underline"
+                    onClick={async () => {
+                      if (!confirm('Delete this run?')) return;
+                      await deleteRun(run.id);
+                      setRecentRuns((prev) => prev.filter((r) => r.id !== run.id));
+                    }}
+                    className="text-sm text-red-400 hover:text-red-600"
                   >
-                    View
+                    Delete
                   </button>
-                )}
+                </div>
               </div>
             ))}
           </div>

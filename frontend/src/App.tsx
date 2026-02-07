@@ -54,7 +54,7 @@ function Layout() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Onboarding Form Filler</h1>
-            <p className="text-sm text-white/75">Auto-fill RFI forms from HubSpot deals and Fireflies transcripts</p>
+            <p className="text-sm text-white/75">Auto-fill onboarding forms from HubSpot deals and Fireflies transcripts</p>
           </div>
           <Link to="/history" className="text-sm text-white/75 hover:text-white">
             History

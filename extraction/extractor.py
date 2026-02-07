@@ -87,6 +87,9 @@ class RFIExtractor:
         if fields is None:
             fields = RFI_FIELDS
 
+        # Skip manual-only fields — they should only be filled by user input
+        fields = [f for f in fields if f.primary_sources != [Source.MANUAL]]
+
         prompt = build_extraction_prompt(fields, text, source_name)
 
         start = time.time()
@@ -163,8 +166,8 @@ class RFIExtractor:
 
         logger.info(f"[PARALLEL] Launching {len(jobs)} extraction jobs")
         total_start = time.time()
-        # Run extraction jobs with limited concurrency to avoid rate limits
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 2) or 1) as executor:
+        # Run extraction jobs in parallel (rate-limit retries handle backpressure)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 5) or 1) as executor:
             futures = {
                 executor.submit(self.extract_from_text, text, name, fields): name
                 for name, text in jobs

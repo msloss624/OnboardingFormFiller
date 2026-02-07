@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { listRuns, getExcelUrl, type RunSummary } from '../api/client';
+import { listRuns, getExcelUrl, deleteRun, type RunSummary } from '../api/client';
 
 export default function HistoryPage() {
   const [searchParams] = useSearchParams();
@@ -84,6 +84,16 @@ export default function HistoryPage() {
                     </a>
                   </>
                 )}
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete this run?')) return;
+                    await deleteRun(run.id);
+                    setRuns((prev) => prev.filter((r) => r.id !== run.id));
+                  }}
+                  className="text-sm text-red-400 hover:text-red-600"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
