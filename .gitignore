@@ -8,3 +8,5 @@ dist/
 build/
 .streamlit/secrets.toml
 deploy.zip
+generated/
+onboarding.db
