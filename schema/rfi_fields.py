@@ -215,9 +215,9 @@ RFI_FIELDS: list[RFIField] = [
     # Row 26 = category header
     RFIField(
         row=27, key="ms_licensing",
-        question="What Microsoft licensing is in use? Qty?",
+        question="What Microsoft licensing is in use? List each license type and qty.",
         category=Category.LICENSING,
-        extraction_hint="Microsoft 365 plan, Office 365 license type, E3, E5, Business Premium, Business Basic, license count, per-user licensing",
+        extraction_hint="List each Microsoft license by name and quantity, e.g. 'M365 Business Premium x 40, E3 x 10'. Look for Office 365, Microsoft 365, E1, E3, E5, F1, F3, Business Basic, Business Standard, Business Premium, Exchange Online, any per-user license counts",
     ),
     RFIField(
         row=28, key="ms_additional_licensing",
