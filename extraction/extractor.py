@@ -11,7 +11,7 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
-from schema.rfi_fields import RFI_FIELDS, RFIField, Category, Confidence, Source, get_fields_by_category
+from schema.rfi_fields import RFI_FIELDS, RFIField, Category, Confidence, Source, get_fields_by_category, get_field_by_key
 
 
 @dataclass
@@ -91,12 +91,24 @@ class RFIExtractor:
 
         start = time.time()
         logger.info(f"[EXTRACT START] {source_name} ({len(text):,} chars)")
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=8000,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
+
+        # Retry with backoff on rate limit errors
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=8000,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                break
+            except anthropic.RateLimitError:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt * 15  # 15s, 30s, 60s, 120s
+                logger.warning(f"[RATE LIMIT] {source_name} — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
 
         response_text = response.content[0].text.strip()
 
@@ -151,8 +163,8 @@ class RFIExtractor:
 
         logger.info(f"[PARALLEL] Launching {len(jobs)} extraction jobs")
         total_start = time.time()
-        # Run all extraction jobs in parallel
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs) or 1) as executor:
+        # Run extraction jobs with limited concurrency to avoid rate limits
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 2) or 1) as executor:
             futures = {
                 executor.submit(self.extract_from_text, text, name, fields): name
                 for name, text in jobs
@@ -167,11 +179,194 @@ class RFIExtractor:
         return all_answers
 
 
+    def extract_single_field(
+        self,
+        field_key: str,
+        sources: list[tuple[str, str]],
+        prompt_hint: str = "",
+    ) -> ExtractedAnswer:
+        """Re-extract a single field with a more aggressive prompt across all sources."""
+        field = get_field_by_key(field_key)
+        if not field:
+            raise ValueError(f"Unknown field key: {field_key}")
+
+        # Concatenate all source text (single field = small enough for one call)
+        combined_text = "\n\n---\n\n".join(
+            f"## Source: {name}\n{text}" for name, text in sources if text and text.strip()
+        )
+
+        hint_section = f"\nAdditional context: {prompt_hint}" if prompt_hint else ""
+
+        prompt = f"""Look harder for the answer to this specific question. Consider synonyms, abbreviations, indirect references, and related terms.
+
+## Question
+Key: {field.key}
+Question: {field.question}
+Category: {field.category.value}
+Look for: {field.extraction_hint}{hint_section}
+
+## Source Text
+{combined_text}
+
+## Instructions
+Return a JSON object with these fields:
+- "key": "{field.key}"
+- "answer": your extracted answer (null if truly not found)
+- "confidence": "high", "medium", "low", or "missing"
+- "evidence": the exact quote supporting your answer (empty string if missing)
+
+Be thorough — look for partial mentions, indirect references, related context. Only return "missing" if there is truly nothing relevant.
+
+Return ONLY the JSON object, no other text."""
+
+        # Retry with backoff (reuses existing pattern)
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2000,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                break
+            except anthropic.RateLimitError:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt * 15
+                logger.warning(f"[RATE LIMIT] retry field {field_key} — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+
+        response_text = response.content[0].text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1]
+            response_text = response_text.rsplit("```", 1)[0]
+
+        item = json.loads(response_text)
+
+        best_source = ""
+        for name, _ in sources:
+            if name:
+                best_source = name
+                break
+
+        return ExtractedAnswer(
+            field_key=field.key,
+            question=field.question,
+            answer=item.get("answer"),
+            confidence=Confidence(item.get("confidence", "missing")),
+            source=item.get("source", best_source),
+            evidence=item.get("evidence", ""),
+            row=field.row,
+        )
+
+    def calibrate_confidence(
+        self,
+        answers: list[ExtractedAnswer],
+    ) -> list[ExtractedAnswer]:
+        """Review HIGH/MEDIUM answers and downgrade if evidence doesn't support the confidence level."""
+        # Filter to answers worth calibrating
+        to_review = [
+            a for a in answers
+            if a.confidence in (Confidence.HIGH, Confidence.MEDIUM)
+            and a.evidence and a.answer
+        ]
+        if not to_review:
+            return answers
+
+        # Build review payload
+        review_items = []
+        for a in to_review:
+            review_items.append({
+                "field_key": a.field_key,
+                "question": a.question,
+                "answer": a.answer,
+                "confidence": a.confidence.value,
+                "evidence": a.evidence[:500],  # Truncate long evidence
+            })
+
+        prompt = f"""You are a quality reviewer. For each answer below, evaluate whether the evidence directly and clearly supports the answer AND its confidence level.
+
+Rules:
+- "high" confidence requires explicit, specific, unambiguous evidence (exact numbers, product names, clear statements)
+- "medium" confidence is for vague mentions, indirect references, or inferred context
+- "low" confidence is for very indirect, barely supportive evidence
+- You may ONLY downgrade confidence (high→medium, high→low, medium→low). Never upgrade.
+- If the evidence properly supports the confidence level, keep it unchanged.
+
+## Answers to Review
+{json.dumps(review_items, indent=2)}
+
+Return a JSON array of objects with:
+- "field_key": the field key
+- "revised_confidence": "high", "medium", or "low"
+
+Return ONLY the JSON array, no other text."""
+
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4000,
+                    system="You are a precise quality assurance reviewer for IT infrastructure data extraction.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                break
+            except anthropic.RateLimitError:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt * 15
+                logger.warning(f"[RATE LIMIT] calibration — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+
+        response_text = response.content[0].text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1]
+            response_text = response_text.rsplit("```", 1)[0]
+
+        try:
+            revisions = json.loads(response_text)
+        except json.JSONDecodeError:
+            logger.warning("[CALIBRATE] Failed to parse calibration response, skipping")
+            return answers
+
+        # Build revision map (only downgrades allowed)
+        downgrade_order = {Confidence.HIGH: 0, Confidence.MEDIUM: 1, Confidence.LOW: 2}
+        revision_map: dict[str, Confidence] = {}
+        for rev in revisions:
+            revised = Confidence(rev.get("revised_confidence", "high"))
+            revision_map[rev["field_key"]] = revised
+
+        # Apply downgrades
+        calibrated = []
+        downgraded_count = 0
+        for a in answers:
+            if a.field_key in revision_map:
+                revised = revision_map[a.field_key]
+                if downgrade_order.get(revised, 0) > downgrade_order.get(a.confidence, 0):
+                    logger.info(f"[CALIBRATE] {a.field_key}: {a.confidence.value} → {revised.value}")
+                    a.confidence = revised
+                    downgraded_count += 1
+            calibrated.append(a)
+
+        if downgraded_count:
+            logger.info(f"[CALIBRATE] Downgraded {downgraded_count} answers")
+        return calibrated
+
     def _chunk_text(self, text: str, max_chars: int = 80000) -> list[str]:
-        """Split long text into chunks at paragraph boundaries."""
+        """Split long text into chunks, respecting speaker turn boundaries for transcripts."""
         if len(text) <= max_chars:
             return [text]
 
+        # Detect Fireflies transcript format (lines starting with **)
+        lines = text.split("\n")
+        is_transcript = any(line.strip().startswith("**") for line in lines[:20])
+
+        if is_transcript:
+            return self._chunk_transcript(text, max_chars)
+
+        # Fallback: paragraph-based chunking (original logic)
         chunks = []
         paragraphs = text.split("\n\n")
         current = []
@@ -187,6 +382,51 @@ class RFIExtractor:
 
         if current:
             chunks.append("\n\n".join(current))
+        return chunks
+
+    def _chunk_transcript(self, text: str, max_chars: int) -> list[str]:
+        """Split transcript text at speaker turn boundaries, keeping Q&A pairs together."""
+        # Split into speaker turns (each starts with **Speaker**)
+        turns: list[str] = []
+        current_turn: list[str] = []
+
+        for line in text.split("\n"):
+            if line.strip().startswith("**") and current_turn:
+                turns.append("\n".join(current_turn))
+                current_turn = [line]
+            else:
+                current_turn.append(line)
+        if current_turn:
+            turns.append("\n".join(current_turn))
+
+        # Group turns into pairs (Q&A) and accumulate into chunks
+        chunks: list[str] = []
+        current_parts: list[str] = []
+        current_len = 0
+
+        i = 0
+        while i < len(turns):
+            # Take at least 2 turns together (a dialogue pair)
+            pair = turns[i]
+            pair_len = len(pair)
+            if i + 1 < len(turns):
+                pair = pair + "\n\n" + turns[i + 1]
+                pair_len = len(pair)
+                i += 2
+            else:
+                i += 1
+
+            if current_len + pair_len > max_chars and current_parts:
+                chunks.append("\n\n".join(current_parts))
+                current_parts = []
+                current_len = 0
+
+            current_parts.append(pair)
+            current_len += pair_len + 2
+
+        if current_parts:
+            chunks.append("\n\n".join(current_parts))
+
         return chunks
 
 
