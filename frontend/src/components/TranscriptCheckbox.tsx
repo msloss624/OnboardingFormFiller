@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function TranscriptCheckbox({ transcript, checked, onChange, previousSources = [] }: Props) {
-  const dateStr = transcript.date ? transcript.date.slice(0, 10) : 'N/A';
+  const dateStr = transcript.date ? String(transcript.date).slice(0, 10) : 'N/A';
   const wasPrevious = previousSources.some((s) => s.includes(transcript.title));
 
   return (
