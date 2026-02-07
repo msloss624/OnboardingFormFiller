@@ -48,7 +48,11 @@ def generate_rfi_excel(
     output_path = Path(output_path)
 
     wb = load_workbook(template_path)
-    ws = wb.active  # "RFI " sheet
+    ws = wb.active  # "RFI" sheet
+
+    # Update title with client name
+    if company_name:
+        ws.cell(row=1, column=1).value = f"Onboarding Form - {company_name}"
 
     # Response column = B, Notes column = C
     response_col = 2  # B
