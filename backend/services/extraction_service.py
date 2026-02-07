@@ -107,17 +107,25 @@ async def _do_extraction(
         async with factory() as db:
             await _update_run(db, run_id, company_name=company_name)
 
-        # 2. Fetch selected transcripts from Fireflies
+        # 2. Fetch selected transcripts from Fireflies (in parallel)
         sources: list[tuple[str, str]] = []
         if transcript_ids:
             ff = FirefliesClient(config.fireflies_api_key)
-            for tid in transcript_ids:
-                try:
-                    t = ff.get_full_transcript(tid)
-                    date_str = str(t.date)[:10] if isinstance(t.date, str) else "Recent" if t.date else "N/A"
-                    sources.append((f"Transcript: {t.title} ({date_str})", t.full_text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch transcript {tid}: {e}")
+            import concurrent.futures
+
+            def fetch_transcript(tid: str):
+                t = ff.get_full_transcript(tid)
+                date_str = str(t.date)[:10] if isinstance(t.date, str) else "Recent" if t.date else "N/A"
+                return (f"Transcript: {t.title} ({date_str})", t.full_text)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(transcript_ids), 5)) as executor:
+                futures = {executor.submit(fetch_transcript, tid): tid for tid in transcript_ids}
+                for future in concurrent.futures.as_completed(futures):
+                    tid = futures[future]
+                    try:
+                        sources.append(future.result())
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch transcript {tid}: {e}")
 
         # 3. Add HubSpot notes
         if notes:
