@@ -22,15 +22,15 @@ async def search_transcripts(
 ):
     ff = _get_fireflies()
     contact_emails = [e.strip() for e in emails.split(",") if e.strip()] if emails else []
-    transcripts = ff.get_transcripts_for_domain(domain, contact_emails)
+    summaries = ff.search_transcripts_for_domain(domain, contact_emails)
     return [
         {
-            "id": t.id,
-            "title": t.title,
-            "date": t.date,
-            "speakers": t.speakers,
-            "word_count": t.word_count,
-            "summary": t.summary,
+            "id": s.id,
+            "title": s.title,
+            "date": s.date,
+            "speakers": s.speakers,
+            "word_count": s.estimated_word_count,
+            "summary": s.short_summary,
         }
-        for t in transcripts
+        for s in summaries
     ]

@@ -3,6 +3,7 @@ HubSpot client — search deals, get company info, pull associated contacts,
 extract email domain, and fetch engagement notes.
 """
 from __future__ import annotations
+import concurrent.futures
 import httpx
 from dataclasses import dataclass, field
 
@@ -257,13 +258,22 @@ class HubSpotClient:
         if not company_ids:
             return {"error": "No company associated with this deal"}
 
-        company = self.get_company(str(company_ids[0]))
-        contacts = self.get_company_contacts(company.id)
-        company.contacts = contacts
-        notes = self.get_company_notes(company.id)
+        company_id = str(company_ids[0])
 
-        # Get deal-level properties (owner, close date)
-        deal_props = self.get_deal_properties(deal_id)
+        # Fetch company, contacts, notes, and deal properties in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            f_company = executor.submit(self.get_company, company_id)
+            f_contacts = executor.submit(self.get_company_contacts, company_id)
+            f_notes = executor.submit(self.get_company_notes, company_id)
+            f_deal_props = executor.submit(self.get_deal_properties, deal_id)
+
+            company = f_company.result()
+            contacts = f_contacts.result()
+            notes = f_notes.result()
+            deal_props = f_deal_props.result()
+
+        company.contacts = contacts
+
         owner_id = deal_props.get("hubspot_owner_id")
         deal_owner = self.get_owner_name(owner_id) if owner_id else None
         close_date = deal_props.get("closedate")

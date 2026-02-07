@@ -3,6 +3,7 @@ Fireflies.ai client — search transcripts by participant email domain,
 retrieve full transcripts for extraction.
 """
 from __future__ import annotations
+import concurrent.futures
 import httpx
 from dataclasses import dataclass, field
 
@@ -17,7 +18,13 @@ class TranscriptSummary:
     date: str
     duration: float
     participants: list[str] = field(default_factory=list)
+    speakers: list[str] = field(default_factory=list)
     short_summary: str = ""
+
+    @property
+    def estimated_word_count(self) -> int:
+        """Estimate ~150 words/minute for meetings. Duration is in minutes."""
+        return int(self.duration * 150) if self.duration else 0
 
 
 @dataclass
@@ -93,6 +100,9 @@ class FirefliesClient:
                 dateString: date
                 duration
                 participants
+                speakers {
+                    name
+                }
                 summary {
                     shorthand_bullet
                 }
@@ -111,12 +121,14 @@ class FirefliesClient:
                 for p in participants
             )
             if has_domain:
+                speakers = [s.get("name", "") for s in (t.get("speakers") or [])]
                 results.append(TranscriptSummary(
                     id=t["id"],
                     title=t.get("title", ""),
                     date=t.get("dateString", ""),
                     duration=t.get("duration", 0),
                     participants=participants,
+                    speakers=speakers,
                     short_summary=t.get("summary", {}).get("shorthand_bullet", "") if t.get("summary") else "",
                 ))
         return results
@@ -131,6 +143,9 @@ class FirefliesClient:
                 dateString: date
                 duration
                 participants
+                speakers {
+                    name
+                }
                 summary {
                     shorthand_bullet
                 }
@@ -145,6 +160,7 @@ class FirefliesClient:
                 date=t.get("dateString", ""),
                 duration=t.get("duration", 0),
                 participants=t.get("participants") or [],
+                speakers=[s.get("name", "") for s in (t.get("speakers") or [])],
                 short_summary=t.get("summary", {}).get("shorthand_bullet", "") if t.get("summary") else "",
             )
             for t in data.get("transcripts", [])
@@ -186,39 +202,62 @@ class FirefliesClient:
             summary=t.get("summary", {}).get("shorthand_bullet", "") if t.get("summary") else "",
         )
 
+    def search_transcripts_for_domain(
+        self, domain: str, contact_emails: list[str] | None = None, limit: int = 20
+    ) -> list[TranscriptSummary]:
+        """
+        Search for transcript summaries involving a client domain.
+        Returns lightweight summaries (no full transcript fetch).
+        Parallelizes email searches for speed.
+        """
+        summaries: list[TranscriptSummary] = []
+        seen_ids: set[str] = set()
+
+        if contact_emails:
+            # Parallel email searches
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(contact_emails), 5)) as executor:
+                futures = {
+                    executor.submit(self.search_by_participant_email, email, limit): email
+                    for email in contact_emails
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        for s in future.result():
+                            if s.id not in seen_ids:
+                                summaries.append(s)
+                                seen_ids.add(s.id)
+                    except Exception:
+                        continue
+
+        # Fallback: broad search filtered by domain
+        if not summaries:
+            summaries = self.search_by_participant(domain, limit=limit)
+
+        return summaries
+
     def get_transcripts_for_domain(
         self, domain: str, contact_emails: list[str] | None = None, limit: int = 20
     ) -> list[FullTranscript]:
         """
         High-level: find all transcripts involving a client domain,
         then retrieve full transcripts for each.
-
-        Tries participant email search first (more reliable),
-        falls back to domain filtering.
+        Used by extraction (needs full text). For listing, use search_transcripts_for_domain.
         """
-        summaries = []
+        summaries = self.search_transcripts_for_domain(domain, contact_emails, limit)
 
-        # Try each known contact email
-        seen_ids: set[str] = set()
-        if contact_emails:
-            for email in contact_emails:
-                for s in self.search_by_participant_email(email, limit=limit):
-                    if s.id not in seen_ids:
-                        summaries.append(s)
-                        seen_ids.add(s.id)
-
-        # Fallback: broad search filtered by domain
-        if not summaries:
-            summaries = self.search_by_participant(domain, limit=limit)
-
-        # Fetch full transcripts
-        full_transcripts = []
-        for s in summaries:
-            try:
-                ft = self.get_full_transcript(s.id)
-                full_transcripts.append(ft)
-            except Exception:
-                continue
+        # Fetch full transcripts in parallel
+        full_transcripts: list[FullTranscript] = []
+        if summaries:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(summaries), 5)) as executor:
+                futures = {
+                    executor.submit(self.get_full_transcript, s.id): s.id
+                    for s in summaries
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        full_transcripts.append(future.result())
+                    except Exception:
+                        continue
 
         return full_transcripts
 
