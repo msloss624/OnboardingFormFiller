@@ -311,7 +311,7 @@ export default function GatherPage() {
         <div className="mt-4">
           <label className="block text-sm text-gray-600 mb-2">Contract Type</label>
           <div className="flex flex-wrap gap-3">
-            {['BPM', 'Infra Only', 'SD Only', 'Security Only'].map((opt) => (
+            {['Fully Managed', 'Infrastructure', 'Service Desk', 'Security'].map((opt) => (
               <label key={opt} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"

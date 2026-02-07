@@ -107,7 +107,7 @@ RFI_FIELDS: list[RFIField] = [
     ),
     RFIField(
         row=9, key="contract_type",
-        question="What type of contract? (BPM / Infra Only / SD Only / Security Only)",
+        question="What type of contract? (Fully Managed / Infrastructure / Service Desk / Security)",
         category=Category.ENGAGEMENT,
         extraction_hint="Manual entry only",
         primary_sources=[Source.MANUAL],
