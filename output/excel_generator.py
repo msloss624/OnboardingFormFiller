@@ -7,7 +7,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from extraction.extractor import ExtractedAnswer
-from schema.rfi_fields import Confidence
+from schema.rfi_fields import RFI_FIELDS, Confidence
 
 
 # Confidence → cell fill color
@@ -170,3 +170,104 @@ def _add_metadata_sheet(wb, answers: list[ExtractedAnswer], company_name: str):
     ws.column_dimensions["B"].width = 15
     ws.column_dimensions["C"].width = 30
     ws.column_dimensions["D"].width = 60
+
+
+def load_answers_from_excel(path: str | Path) -> list[ExtractedAnswer]:
+    """
+    Load previously generated answers from an Excel file.
+
+    Reads the RFI sheet column B for answers and the Metadata sheet
+    for per-field confidence, source, and evidence.
+    """
+    wb = load_workbook(path, data_only=True)
+    ws_rfi = wb.active
+    ws_meta = wb["Metadata"] if "Metadata" in wb.sheetnames else None
+
+    # Build per-field metadata from the Metadata sheet detail breakdown
+    meta_lookup: dict[str, dict] = {}  # question -> {confidence, source, evidence}
+    if ws_meta:
+        # Find the detail header row ("Field" in column A)
+        for row in ws_meta.iter_rows(min_col=1, max_col=1):
+            cell = row[0]
+            if cell.value == "Field":
+                detail_start = cell.row
+                # Read rows after the header
+                for r in range(detail_start + 1, ws_meta.max_row + 1):
+                    question = ws_meta.cell(row=r, column=1).value
+                    conf_val = ws_meta.cell(row=r, column=2).value
+                    source = ws_meta.cell(row=r, column=3).value or ""
+                    evidence = ws_meta.cell(row=r, column=4).value or ""
+                    if question:
+                        meta_lookup[question] = {
+                            "confidence": conf_val or "missing",
+                            "source": source,
+                            "evidence": evidence,
+                        }
+                break
+
+    answers = []
+    for field in RFI_FIELDS:
+        cell_value = ws_rfi.cell(row=field.row, column=2).value  # Column B
+        answer_text = str(cell_value).strip() if cell_value else None
+
+        # Skip "— Not found —" placeholders
+        if answer_text and answer_text == "— Not found —":
+            answer_text = None
+
+        meta = meta_lookup.get(field.question, {})
+        conf_str = meta.get("confidence", "missing")
+        try:
+            confidence = Confidence(conf_str)
+        except ValueError:
+            confidence = Confidence.MISSING if not answer_text else Confidence.MEDIUM
+
+        # If we have an answer but confidence says missing, correct it
+        if answer_text and confidence == Confidence.MISSING:
+            confidence = Confidence.MEDIUM
+
+        # If no answer, force missing
+        if not answer_text:
+            confidence = Confidence.MISSING
+
+        answers.append(ExtractedAnswer(
+            field_key=field.key,
+            question=field.question,
+            answer=answer_text,
+            confidence=confidence,
+            source=meta.get("source", "Previous run"),
+            evidence=meta.get("evidence", ""),
+            row=field.row,
+        ))
+
+    wb.close()
+    return answers
+
+
+def get_previous_sources(path: str | Path) -> set[str]:
+    """
+    Read the Metadata sheet 'Sources' section and return the set of
+    source names used in a previous generation.
+    """
+    wb = load_workbook(path, data_only=True)
+    sources: set[str] = set()
+
+    if "Metadata" not in wb.sheetnames:
+        wb.close()
+        return sources
+
+    ws = wb["Metadata"]
+    # Find the "Sources" header (in column A)
+    in_sources = False
+    for row in ws.iter_rows(min_col=1, max_col=1):
+        cell = row[0]
+        if cell.value == "Sources":
+            in_sources = True
+            continue
+        if in_sources:
+            # Stop at next bold header or empty cell
+            if not cell.value or (cell.font and cell.font.bold and cell.value != "Sources"):
+                break
+            sources.add(str(cell.value).strip())
+
+    wb.close()
+    return sources
