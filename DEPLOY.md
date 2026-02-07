@@ -1,4 +1,4 @@
-# Deploying RFI AutoFiller to Azure
+# Deploying Onboarding Form Filler to Azure
 
 ## What you'll end up with
 A URL like `https://rfi-autofiller.azurewebsites.net` that you open in a browser.

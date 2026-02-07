@@ -2,6 +2,7 @@
 Fireflies.ai client — search transcripts by participant email domain,
 retrieve full transcripts for extraction.
 """
+from __future__ import annotations
 import httpx
 from dataclasses import dataclass, field
 
@@ -69,7 +70,8 @@ class FirefliesClient:
             headers=self.headers,
             json={"query": query, "variables": variables or {}},
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            resp.raise_for_status()
         data = resp.json()
         if "errors" in data:
             raise Exception(f"Fireflies GraphQL error: {data['errors']}")
@@ -157,8 +159,8 @@ class FirefliesClient:
                 title
                 date
                 speakers {
-                    displayName
-                    email
+                    id
+                    name
                 }
                 sentences {
                     speaker_name
@@ -174,7 +176,7 @@ class FirefliesClient:
         """
         data = self._query(query, {"id": transcript_id})
         t = data.get("transcript", {})
-        speakers = [s.get("displayName", "") for s in (t.get("speakers") or [])]
+        speakers = [s.get("name", "") for s in (t.get("speakers") or [])]
         return FullTranscript(
             id=t.get("id", transcript_id),
             title=t.get("title", ""),
@@ -216,7 +218,7 @@ class FirefliesClient:
                 ft = self.get_full_transcript(s.id)
                 full_transcripts.append(ft)
             except Exception:
-                continue  # Skip failed fetches, log in production
+                continue
 
         return full_transcripts
 

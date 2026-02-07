@@ -2,6 +2,7 @@
 Excel generator — fills the RFI template with extracted answers,
 color-codes cells by confidence, and adds a sources metadata sheet.
 """
+from __future__ import annotations
 from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -113,7 +114,7 @@ def _add_metadata_sheet(wb, answers: list[ExtractedAnswer], company_name: str):
     ws = wb.create_sheet("Metadata")
 
     # Header
-    ws["A1"] = "RFI AutoFiller — Generation Report"
+    ws["A1"] = "Onboarding Form Filler — Generation Report"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = f"Company: {company_name}"
     ws["A2"].font = Font(size=12)

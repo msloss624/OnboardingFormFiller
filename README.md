@@ -1,4 +1,4 @@
-# OnboardingFormFiller (RFI AutoFiller)
+# Onboarding Form Filler
 
 ## What This Is
 A Streamlit web app that auto-fills the 87-field IT infrastructure RFI template using data pulled from HubSpot and Fireflies.ai meeting transcripts. Claude (Anthropic API) reads the transcripts and extracts answers to each RFI question with confidence scoring.
@@ -180,29 +180,41 @@ Opens at http://localhost:8501
 
 ---
 
-## Current Deployment Status (WHERE WE LEFT OFF)
+## Current Status (Updated 2026-02-06)
 
 ### What's done:
-- ✅ All app code written and in this repo
+- ✅ All app code written and tested locally
 - ✅ GitHub repo created (`OnboardingFormFiller`, private)
-- ✅ Azure Web App created (named `OnboardingFormFiller`, B1 plan, Python 3.11, Linux)
-- ✅ Environment variables set in Azure (HUBSPOT_API_KEY, FIREFLIES_API_KEY, ANTHROPIC_API_KEY, WEBSITES_PORT=8501, SCM_DO_BUILD_DURING_DEPLOYMENT=true)
+- ✅ Azure Web App created and deployed (B1 plan, Python 3.11, Linux)
+- ✅ Environment variables set in Azure
 - ✅ GitHub connected to Azure Deployment Center (auto-deploys on push to main)
+- ✅ **HubSpot pipeline filter** — only queries "Outside Sales" pipeline deals
+- ✅ **Fireflies fix** — GraphQL query corrected (`speakers.name` not `displayName`)
+- ✅ **UI/UX improvements** — Bellwether branding (#1E4488 blue, #F78E28 orange), step indicator
+- ✅ **Enter key search** — form wrapper enables Enter to submit
+- ✅ **Back button fix** — preserves cached data when navigating back
 
-### What still needs to be done:
-- ⬜ **Set the startup command in Azure.** Go to Azure Portal → App Service → Configuration → General settings → Startup Command, and paste:
-  ```
-  python -m streamlit run app.py --server.port 8000 --server.address 0.0.0.0 --server.headless true
-  ```
-- ⬜ **Push the README to GitHub** (this file wasn't in the initial upload)
-- ⬜ **Test the app** — visit https://onboardingformfiller.azurewebsites.net and try generating an RFI for R&R Brands
-- ⬜ **Debug any deployment issues** — check Azure logs if the app doesn't load (App Service → Log stream)
-- ⬜ **Iterate on extraction prompts** — after first test run, tune the Claude prompts in `extraction/extractor.py` based on quality of extracted answers
+### To run locally:
+```bash
+cd OnboardingFormFiller
+pip install -r requirements.txt
+# Ensure .env has your 3 API keys (see .env.example)
+streamlit run app.py
+```
+Opens at http://localhost:8501
 
-### Known issues to watch for:
-- The Fireflies GraphQL schema may differ slightly from what was built — the client was written based on API docs but hasn't been live-tested against the real API yet
-- HubSpot notes API requires an engagement opt-in (there's a link in HubSpot settings) — without it, notes won't be fetched but transcripts will still work
-- If Azure shows "Application Error" on first visit, check that the startup command is set and the WEBSITES_PORT is 8501
+### To deploy to Azure:
+Push to `main` branch — Azure picks it up automatically via GitHub Actions.
+
+### Azure startup command (already configured):
+```
+python -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+```
+
+### Next steps (Phase 2):
+- ⬜ SharePoint/OneDrive integration for additional source docs
+- ⬜ URL fetching — auto-crawl pasted URLs
+- ⬜ Email sending — auto-email completed RFI via Graph API
 
 ---
 

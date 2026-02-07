@@ -2,8 +2,14 @@
 Claude-powered extraction engine — takes transcript text and RFI field schema,
 returns structured answers with confidence scores and source references.
 """
+from __future__ import annotations
 import json
+import logging
+import time
+import concurrent.futures
 import anthropic
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from schema.rfi_fields import RFI_FIELDS, RFIField, Category, Confidence, Source, get_fields_by_category
 
@@ -67,7 +73,7 @@ Return ONLY the JSON array, no other text."""
 
 
 class RFIExtractor:
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250514"):
+    def __init__(self, api_key: str, model: str = "claude-haiku-4-5-20251001"):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
 
@@ -83,6 +89,8 @@ class RFIExtractor:
 
         prompt = build_extraction_prompt(fields, text, source_name)
 
+        start = time.time()
+        logger.info(f"[EXTRACT START] {source_name} ({len(text):,} chars)")
         response = self.client.messages.create(
             model=self.model,
             max_tokens=8000,
@@ -96,6 +104,9 @@ class RFIExtractor:
         if response_text.startswith("```"):
             response_text = response_text.split("\n", 1)[1]
             response_text = response_text.rsplit("```", 1)[0]
+
+        elapsed = time.time() - start
+        logger.info(f"[EXTRACT DONE] {source_name} — {elapsed:.1f}s")
 
         raw = json.loads(response_text)
         field_map = {f.key: f for f in fields}
@@ -122,25 +133,37 @@ class RFIExtractor:
         sources: list[tuple[str, str]],  # [(source_name, text), ...]
         fields: list[RFIField] | None = None,
     ) -> dict[str, list[ExtractedAnswer]]:
-        """Extract from multiple sources, return answers grouped by field key."""
+        """Extract from multiple sources in parallel, return answers grouped by field key."""
         if fields is None:
             fields = RFI_FIELDS
 
-        all_answers: dict[str, list[ExtractedAnswer]] = {}
-
+        # Build list of (chunk_name, chunk_text) jobs
+        jobs: list[tuple[str, str]] = []
         for source_name, text in sources:
-            # Skip empty sources
             if not text or len(text.strip()) < 50:
                 continue
-
-            # Chunk very long texts (>100k chars) to stay within context
             chunks = self._chunk_text(text, max_chars=80000)
             for i, chunk in enumerate(chunks):
                 chunk_name = source_name if len(chunks) == 1 else f"{source_name} (part {i+1})"
-                answers = self.extract_from_text(chunk, chunk_name, fields)
+                jobs.append((chunk_name, chunk))
+
+        all_answers: dict[str, list[ExtractedAnswer]] = {}
+
+        logger.info(f"[PARALLEL] Launching {len(jobs)} extraction jobs")
+        total_start = time.time()
+        # Run all extraction jobs in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs) or 1) as executor:
+            futures = {
+                executor.submit(self.extract_from_text, text, name, fields): name
+                for name, text in jobs
+            }
+            for future in concurrent.futures.as_completed(futures):
+                answers = future.result()
                 for a in answers:
                     all_answers.setdefault(a.field_key, []).append(a)
 
+        total_elapsed = time.time() - total_start
+        logger.info(f"[PARALLEL] All {len(jobs)} jobs done in {total_elapsed:.1f}s")
         return all_answers
 
 
