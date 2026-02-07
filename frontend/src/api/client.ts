@@ -61,6 +61,18 @@ export async function retryField(runId: string, fieldKey: string, promptHint?: s
   return data as Answer;
 }
 
+export async function deleteRun(runId: string) {
+  const { data } = await api.delete(`/runs/${runId}`);
+  return data;
+}
+
+export async function uploadFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post('/runs/upload', form);
+  return data as { filename: string; text: string };
+}
+
 export function getExcelUrl(runId: string) {
   return `/api/runs/${runId}/excel`;
 }

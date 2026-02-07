@@ -4,6 +4,7 @@ import {
   getDealContext,
   searchTranscripts,
   createRun,
+  uploadFile,
   type Deal,
   type DealContext,
   type Transcript,
@@ -21,6 +22,8 @@ export default function GatherPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [additionalText, setAdditionalText] = useState('');
   const [manualFields, setManualFields] = useState({ bellwether_team: '', number_of_users: '', number_of_devices: '' });
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; text: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,6 +42,7 @@ export default function GatherPage() {
           .filter((c) => c.email && ctx.client_domain && c.email.includes(ctx.client_domain))
           .map((c) => c.email);
         const ts = await searchTranscripts(ctx.client_domain, emails);
+        ts.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
         setTranscripts(ts);
         // Select all by default
         setSelectedIds(new Set(ts.map((t) => t.id)));
@@ -60,6 +64,25 @@ export default function GatherPage() {
     });
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // reset so the same file can be re-selected
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      setUploadedFiles((prev) => [...prev, { name: result.filename, text: result.text }]);
+    } catch {
+      alert('Failed to extract text from file. Please check the file and try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeUploadedFile(index: number) {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit() {
     if (!deal) return;
     setSubmitting(true);
@@ -69,11 +92,16 @@ export default function GatherPage() {
     if (manualFields.number_of_users.trim()) overrides.number_of_users = manualFields.number_of_users;
     if (manualFields.number_of_devices.trim()) overrides.number_of_devices = manualFields.number_of_devices;
 
+    const allText = [
+      additionalText,
+      ...uploadedFiles.map((f) => `--- ${f.name} ---\n${f.text}`),
+    ].filter(Boolean).join('\n\n');
+
     const result = await createRun({
       deal_id: deal.id,
       deal_name: deal.name,
       transcript_ids: Array.from(selectedIds),
-      additional_text: additionalText,
+      additional_text: allText,
       manual_overrides: overrides,
       baseline_run_id: baselineRunId,
     });
@@ -145,6 +173,19 @@ export default function GatherPage() {
         </h3>
         {transcripts && transcripts.length > 0 ? (
           <div className="space-y-2">
+            <label className="flex items-center gap-2 pb-2 border-b border-gray-100 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedIds.size === transcripts.length}
+                onChange={(e) =>
+                  setSelectedIds(e.target.checked ? new Set(transcripts.map((t) => t.id)) : new Set())
+                }
+                className="h-4 w-4 rounded border-gray-300 text-[#1E4488]"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                {selectedIds.size === transcripts.length ? 'Deselect all' : 'Select all'}
+              </span>
+            </label>
             {transcripts.map((t) => (
               <TranscriptCheckbox
                 key={t.id}
@@ -172,11 +213,58 @@ export default function GatherPage() {
           rows={4}
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
         />
+
+        <div className="mt-3">
+          <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+            {uploading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#1E4488] border-t-transparent" />
+                Extracting text...
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Upload PDF or Word file
+              </>
+            )}
+            <input
+              type="file"
+              accept=".pdf,.docx,.doc"
+              onChange={handleFileUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {uploadedFiles.map((f, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                <svg className="h-4 w-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="truncate">{f.name}</span>
+                <button
+                  onClick={() => removeUploadedFile(i)}
+                  className="ml-auto text-gray-400 hover:text-red-500 shrink-0"
+                  title="Remove file"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Manual fields */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="font-semibold text-gray-700 mb-2">Project Details</h3>
+        <h3 className="font-semibold text-gray-700 mb-2">Client Details</h3>
         <p className="text-xs text-gray-500 mb-3">These fields are filled by the person running the form.</p>
         <div className="grid grid-cols-3 gap-4">
           <div>

@@ -7,7 +7,9 @@ import json
 import threading
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -68,6 +70,36 @@ async def create_run(
     return {"id": run.id, "status": run.status}
 
 
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc"}
+
+
+@router.post("/upload")
+async def upload_file(file: UploadFile):
+    """Extract text from an uploaded PDF or Word document."""
+    filename = file.filename or "unknown"
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+
+    contents = await file.read()
+
+    if ext == ".pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(contents))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    elif ext in (".docx", ".doc"):
+        from docx import Document
+
+        doc = Document(io.BytesIO(contents))
+        text = "\n".join(p.text for p in doc.paragraphs)
+    else:
+        raise HTTPException(400, "Unsupported file type")
+
+    return {"filename": filename, "text": text.strip()}
+
+
 @router.get("/{run_id}")
 async def get_run(run_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Run).where(Run.id == run_id))
@@ -106,6 +138,17 @@ async def update_answers(
     run.answers_json = json.dumps(body.answers)
     await db.commit()
     return {"status": "saved"}
+
+
+@router.delete("/{run_id}")
+async def delete_run(run_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Run).where(Run.id == run_id))
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(404, "Run not found")
+    await db.delete(run)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/{run_id}/retry-field")
