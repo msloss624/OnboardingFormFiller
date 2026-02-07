@@ -5,6 +5,7 @@ import {
   searchTranscripts,
   createRun,
   uploadFile,
+  getRun,
   type Deal,
   type DealContext,
   type Transcript,
@@ -22,6 +23,7 @@ export default function GatherPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [additionalText, setAdditionalText] = useState('');
   const [manualFields, setManualFields] = useState({ bellwether_team: '', number_of_users: '', number_of_devices: '' });
+  const [previousSources, setPreviousSources] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; text: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -50,11 +52,16 @@ export default function GatherPage() {
         setTranscripts([]);
       }
 
+      if (baselineRunId) {
+        const baseline = await getRun(baselineRunId);
+        if (baseline.sources_used) setPreviousSources(baseline.sources_used);
+      }
+
       setLoading(false);
     }
 
     load();
-  }, [deal, navigate]);
+  }, [deal, navigate, baselineRunId]);
 
   function toggleTranscript(id: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -192,6 +199,7 @@ export default function GatherPage() {
                 transcript={t}
                 checked={selectedIds.has(t.id)}
                 onChange={(checked) => toggleTranscript(t.id, checked)}
+                previousSources={previousSources}
               />
             ))}
             <p className="text-xs text-gray-500 mt-2">
