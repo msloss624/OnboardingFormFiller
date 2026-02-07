@@ -2,6 +2,7 @@
 HubSpot client — search deals, get company info, pull associated contacts,
 extract email domain, and fetch engagement notes.
 """
+from __future__ import annotations
 import httpx
 from dataclasses import dataclass, field
 
@@ -62,24 +63,58 @@ class HubSpotClient:
     def __init__(self, api_key: str):
         self.headers = {"Authorization": f"Bearer {api_key}"}
         self.client = httpx.Client(base_url=BASE, headers=self.headers, timeout=30)
+        self._stage_labels: dict[str, str] | None = None
+
+    def _get_stage_labels(self) -> dict[str, str]:
+        """Fetch and cache mapping of stage ID → display label across all pipelines."""
+        if self._stage_labels is None:
+            resp = self.client.get("/crm/v3/pipelines/deals")
+            resp.raise_for_status()
+            self._stage_labels = {}
+            for pipeline in resp.json().get("results", []):
+                for stage in pipeline.get("stages", []):
+                    self._stage_labels[stage["id"]] = stage["label"]
+        return self._stage_labels
 
     # ── Deals ────────────────────────────────────────────────────────
 
-    def search_deals(self, query: str, limit: int = 10) -> list[Deal]:
-        """Search deals by name."""
-        resp = self.client.post("/crm/v3/objects/deals/search", json={
+    def search_deals(self, query: str, limit: int = 10, pipeline: str = "default") -> list[Deal]:
+        """Search deals by name, filtered to a specific pipeline."""
+        search_body = {
             "query": query,
             "limit": limit,
-            "properties": ["dealname", "dealstage", "amount", "closedate"],
-        })
+            "properties": ["dealname", "dealstage", "amount", "closedate", "pipeline"],
+            "filterGroups": [{
+                "filters": [
+                    {
+                        "propertyName": "pipeline",
+                        "operator": "EQ",
+                        "value": pipeline,
+                    },
+                    {
+                        "propertyName": "dealstage",
+                        "operator": "NEQ",
+                        "value": "12660608",
+                    },
+                    {
+                        "propertyName": "dealstage",
+                        "operator": "NEQ",
+                        "value": "8355557",
+                    },
+                ]
+            }]
+        }
+        resp = self.client.post("/crm/v3/objects/deals/search", json=search_body)
         resp.raise_for_status()
+        stage_labels = self._get_stage_labels()
         deals = []
         for r in resp.json().get("results", []):
             p = r.get("properties", {})
+            stage_id = p.get("dealstage", "")
             deals.append(Deal(
                 id=r["id"],
                 name=p.get("dealname", ""),
-                stage=p.get("dealstage", ""),
+                stage=stage_labels.get(stage_id, stage_id),
                 amount=p.get("amount"),
                 close_date=p.get("closedate"),
             ))
@@ -188,10 +223,31 @@ class HubSpotClient:
             if r.get("properties", {}).get("hs_note_body")
         ]
 
+    # ── Owners ────────────────────────────────────────────────────────
+
+    def get_owner_name(self, owner_id: str) -> str | None:
+        """Get the display name of a HubSpot owner by ID."""
+        resp = self.client.get(f"/crm/v3/owners/{owner_id}")
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        first = data.get("firstName", "")
+        last = data.get("lastName", "")
+        return f"{first} {last}".strip() or None
+
+    # ── Deals (detail) ────────────────────────────────────────────────
+
+    def get_deal_properties(self, deal_id: str) -> dict:
+        """Fetch deal properties including owner and close date."""
+        props = "dealname,dealstage,amount,closedate,hubspot_owner_id"
+        resp = self.client.get(f"/crm/v3/objects/deals/{deal_id}", params={"properties": props})
+        resp.raise_for_status()
+        return resp.json().get("properties", {})
+
     # ── High-level: get everything for a deal ────────────────────────
 
     def get_deal_context(self, deal_id: str) -> dict:
-        """Pull all relevant data for a deal: company info, contacts, notes."""
+        """Pull all relevant data for a deal: company info, contacts, notes, owner."""
         # Get associated company
         company_ids = self.get_deal_associations(deal_id, "companies")
         if not company_ids:
@@ -202,11 +258,19 @@ class HubSpotClient:
         company.contacts = contacts
         notes = self.get_company_notes(company.id)
 
+        # Get deal-level properties (owner, close date)
+        deal_props = self.get_deal_properties(deal_id)
+        owner_id = deal_props.get("hubspot_owner_id")
+        deal_owner = self.get_owner_name(owner_id) if owner_id else None
+        close_date = deal_props.get("closedate")
+
         return {
             "company": company,
             "contacts": contacts,
             "notes": notes,
             "client_domain": company.client_domain,
+            "deal_owner": deal_owner,
+            "close_date": close_date,
         }
 
     def close(self):
