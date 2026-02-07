@@ -221,6 +221,7 @@ class HubSpotClient:
             }
             for r in resp.json().get("results", [])
             if r.get("properties", {}).get("hs_note_body")
+            and "Sent by Fireflies.ai" not in r["properties"]["hs_note_body"]
         ]
 
     # ── Owners ────────────────────────────────────────────────────────
