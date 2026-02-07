@@ -23,6 +23,7 @@ export default function GatherPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [additionalText, setAdditionalText] = useState('');
   const [manualFields, setManualFields] = useState({ bellwether_team: '', number_of_users: '', number_of_devices: '' });
+  const [contractTypes, setContractTypes] = useState<Set<string>>(new Set());
   const [previousSources, setPreviousSources] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; text: string }[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -98,6 +99,7 @@ export default function GatherPage() {
     if (manualFields.bellwether_team.trim()) overrides.bellwether_team = manualFields.bellwether_team;
     if (manualFields.number_of_users.trim()) overrides.number_of_users = manualFields.number_of_users;
     if (manualFields.number_of_devices.trim()) overrides.number_of_devices = manualFields.number_of_devices;
+    if (contractTypes.size > 0) overrides.contract_type = Array.from(contractTypes).join(', ');
 
     const allText = [
       additionalText,
@@ -304,6 +306,28 @@ export default function GatherPage() {
               placeholder="e.g. 50"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
             />
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className="block text-sm text-gray-600 mb-2">Contract Type</label>
+          <div className="flex flex-wrap gap-3">
+            {['BPM', 'Infra Only', 'SD Only', 'Security Only'].map((opt) => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={contractTypes.has(opt)}
+                  onChange={(e) =>
+                    setContractTypes((prev) => {
+                      const next = new Set(prev);
+                      e.target.checked ? next.add(opt) : next.delete(opt);
+                      return next;
+                    })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-[#1E4488]"
+                />
+                <span className="text-sm text-gray-700">{opt}</span>
+              </label>
+            ))}
           </div>
         </div>
       </div>

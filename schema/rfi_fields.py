@@ -109,25 +109,17 @@ RFI_FIELDS: list[RFIField] = [
         row=9, key="contract_type",
         question="What type of contract? (BPM / Infra Only / SD Only / Security Only)",
         category=Category.ENGAGEMENT,
-        extraction_hint="Contract type, BPM, business process management, infrastructure only, service desk only, security only, managed services scope",
-        primary_sources=[Source.TRANSCRIPT, Source.MANUAL],
+        extraction_hint="Manual entry only",
+        primary_sources=[Source.MANUAL],
     ),
     RFIField(
         row=10, key="desired_go_live",
         question="Desired go-live date?",
         category=Category.ENGAGEMENT,
-        extraction_hint="Go-live date, start date, launch date, target date, when do they want to start",
+        extraction_hint="Go-live date, start date, launch date, target date, when do they want to start. Go-live = when we begin supporting them. Onboarding starts ~30 days before go-live",
         primary_sources=[Source.HUBSPOT, Source.TRANSCRIPT],
         hubspot_property="closedate",
     ),
-    RFIField(
-        row=11, key="transition_timeline",
-        question="What is the transition/overlap period with the current provider?",
-        category=Category.ENGAGEMENT,
-        extraction_hint="Transition period, overlap, handoff timeline, notice period, contract end date with current MSP, runbook period",
-        primary_sources=[Source.TRANSCRIPT],
-    ),
-
     # ── 2. Company Overview ─────────────────────────────────────────
     # Row 12 = category header
     RFIField(
@@ -140,17 +132,17 @@ RFI_FIELDS: list[RFIField] = [
     ),
     RFIField(
         row=14, key="company_location",
-        question="Where is the company located (HQ and remote offices)?",
+        question="Where is the company located? List HQ and any remote/satellite/additional offices.",
         category=Category.COMPANY,
-        extraction_hint="HQ city/state, office locations, remote office addresses, satellite offices",
+        extraction_hint="List headquarters location and all remote, satellite, or additional offices. Include city/state for each. Look for branch offices, retail locations, restaurants, warehouses, field offices",
         primary_sources=[Source.HUBSPOT, Source.TRANSCRIPT],
         hubspot_property="city",
     ),
     RFIField(
         row=15, key="industry_vertical",
-        question="About this company",
+        question="Details about this company",
         category=Category.COMPANY,
-        extraction_hint="Company description, what they do, industry, vertical, sector, products, services, number of locations, business model",
+        extraction_hint="Any relevant details an MSP onboarding team would care about: industry, vertical, what the company does, products/services, number of locations, business model, seasonal patterns, compliance-sensitive verticals (healthcare, legal, finance), operational complexity",
         primary_sources=[Source.TRANSCRIPT],
     ),
     RFIField(
@@ -208,7 +200,7 @@ RFI_FIELDS: list[RFIField] = [
         row=25, key="business_hours",
         question="What are the operating hours (Business Hours)?",
         category=Category.CURRENT_STATE,
-        extraction_hint="Business hours, operating hours, office hours, 9-5, time zone, shifts",
+        extraction_hint="Business hours, operating hours, office hours, 9-5, time zone, shifts. If not explicitly stated, infer from industry context (e.g. restaurants often operate evenings/weekends, law firms standard business hours). When inferring, note 'Estimated based on industry' in the answer",
     ),
 
     # ── 4. Microsoft 365 & Licensing ────────────────────────────────
@@ -280,7 +272,7 @@ RFI_FIELDS: list[RFIField] = [
         row=38, key="server_specs",
         question="What are the server specs (CPU, RAM, Disk Space)?",
         category=Category.SERVERS,
-        extraction_hint="CPU, RAM, disk space, storage, server hardware model, Dell, HP, Lenovo, server specs",
+        extraction_hint="CPU, RAM, disk space, storage, server hardware brand/model, Dell, HP, Lenovo, server specs",
     ),
     RFIField(
         row=39, key="virtualization",
@@ -455,27 +447,27 @@ RFI_FIELDS: list[RFIField] = [
     ),
     RFIField(
         row=69, key="firewalls",
-        question="Number of firewalls and the model(s)?",
+        question="Number of firewalls and the brand/model(s)?",
         category=Category.NETWORK,
-        extraction_hint="Firewall count, firewall model, SonicWall, Fortinet, FortiGate, Meraki, Palo Alto, WatchGuard, Cisco, end of life firewall",
+        extraction_hint="Firewall count, firewall brand/model, SonicWall, Fortinet, FortiGate, Meraki, Palo Alto, WatchGuard, Cisco, end of life firewall",
     ),
     RFIField(
         row=70, key="routers",
-        question="Number of routers and the model(s)?",
+        question="Number of routers and the brand/model(s)?",
         category=Category.NETWORK,
-        extraction_hint="Router count, router model, Cisco, Meraki, Ubiquiti, routing",
+        extraction_hint="Router count, router brand/model, Cisco, Meraki, Ubiquiti, routing",
     ),
     RFIField(
         row=71, key="switches",
-        question="Number of switches and the model(s)?",
+        question="Number of switches and the brand/model(s)?",
         category=Category.NETWORK,
-        extraction_hint="Switch count, switch model, Cisco, Meraki, Ubiquiti, HP, managed switch, PoE",
+        extraction_hint="Switch count, switch brand/model, Cisco, Meraki, Ubiquiti, HP, managed switch, PoE",
     ),
     RFIField(
         row=72, key="waps",
-        question="Number of WAPs and the model(s)?",
+        question="Number of WAPs and the brand/model(s)?",
         category=Category.NETWORK,
-        extraction_hint="Wireless access points, WAP count, WAP model, Meraki, Ubiquiti, Aruba, Wi-Fi, WiFi",
+        extraction_hint="Wireless access points, WAP count, WAP brand/model, Meraki, Ubiquiti, Aruba, Wi-Fi, WiFi",
     ),
     RFIField(
         row=73, key="printers_copiers",
@@ -648,17 +640,23 @@ RFI_FIELDS: list[RFIField] = [
         category=Category.BACKUP,
         extraction_hint="Email backup, SaaS backup, backup for 365, Barracuda, Veeam for 365, Spanning, cloud-to-cloud backup",
     ),
+    RFIField(
+        row=103, key="backup_equipment_onsite",
+        question="Is there any backup equipment on site?",
+        category=Category.BACKUP,
+        extraction_hint="On-site backup equipment, BDR appliance, NAS, backup server, tape drive, local backup device, Datto appliance, backup hardware on premises",
+    ),
 
     # ── 12. Documentation & Handoff ─────────────────────────────────
-    # Row 103 = category header
+    # Row 104 = category header
     RFIField(
-        row=104, key="existing_documentation",
+        row=105, key="existing_documentation",
         question="Is there existing IT documentation? What platform (IT Glue, Passportal, wiki)?",
         category=Category.DOCUMENTATION,
         extraction_hint="IT documentation, IT Glue, Passportal, Hudu, wiki, documentation platform, knowledge base, runbooks",
     ),
     RFIField(
-        row=105, key="admin_credentials",
+        row=106, key="admin_credentials",
         question="What admin credentials and accounts need to be transferred?",
         category=Category.DOCUMENTATION,
         extraction_hint="Admin credentials, admin accounts, global admin, service accounts, root passwords, credential handoff, password vault",
