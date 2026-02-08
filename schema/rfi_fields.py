@@ -342,13 +342,13 @@ RFI_FIELDS: list[RFIField] = [
         row=50, key="firewalls",
         question="Number of firewalls and the brand/model(s)?",
         category=Category.NETWORK,
-        extraction_hint="Firewall count, firewall brand/model, SonicWall, Fortinet, FortiGate, Meraki, Palo Alto, WatchGuard, Cisco, end of life firewall",
+        extraction_hint="Firewall count, firewall brand/model, SonicWall, Fortinet, FortiGate, Meraki, Mako, Palo Alto, WatchGuard, Cisco, end of life firewall. Include brand/model even if mentioned alongside switches or other equipment",
     ),
     RFIField(
         row=51, key="network_equipment",
         question="Network equipment: routers, switches, WAPs (brand/model and count)",
         category=Category.NETWORK,
-        extraction_hint="Router count, router brand/model, Cisco, Meraki, Ubiquiti, switch count, switch brand/model, HP, managed switch, PoE, wireless access points, WAP count, WAP brand/model, Aruba, Wi-Fi, WiFi",
+        extraction_hint="Router count, router brand/model, Cisco, Meraki, Mako, Ubiquiti, switch count, switch brand/model, HP, managed switch, PoE, wireless access points, WAP count, WAP brand/model, Aruba, Wi-Fi, WiFi. Include brand/model even if mentioned alongside firewalls or other equipment",
     ),
     RFIField(
         row=52, key="printers_copiers",
@@ -366,7 +366,7 @@ RFI_FIELDS: list[RFIField] = [
         row=54, key="other_it_vendors",
         question="Are there existing relationships with other IT vendors or service providers?",
         category=Category.NETWORK,
-        extraction_hint="Other IT vendors, ISP, telco, copier vendor, vendor relationships, other providers",
+        extraction_hint="Other IT vendors, ISP, telco, copier vendor, vendor relationships, other providers. Do NOT include firewall, switch, router, or WAP brands here — those belong in the dedicated networking fields",
     ),
 
     # ── 9. Devices & Endpoints (rows 56-60, 5 fields) ───────────────
