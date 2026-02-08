@@ -473,9 +473,103 @@ Return ONLY the JSON array, no other text."""
         return chunks
 
 
+def _resolve_conflicts(
+    conflict_fields: dict[str, list[ExtractedAnswer]],
+    extractor: "RFIExtractor",
+) -> tuple[dict[str, bool], dict[str, str]]:
+    """Use LLM to determine which field conflicts are real contradictions vs compatible answers.
+
+    Returns (verdicts, best_answers) where:
+    - verdicts maps field_key -> True if compatible, False if conflicting
+    - best_answers maps field_key -> synthesized best answer string (only for compatible fields)
+    """
+    review_items = []
+    for field_key, answers in conflict_fields.items():
+        review_items.append({
+            "field_key": field_key,
+            "question": answers[0].question,
+            "answers": [
+                {
+                    "source": a.source,
+                    "answer": a.answer,
+                    "evidence": (a.evidence or "")[:500],
+                }
+                for a in answers
+            ],
+        })
+
+    prompt = f"""You are reviewing extracted answers for potential contradictions. For each field below, multiple sources gave different text for the same question. Use the supporting evidence to understand context, then determine whether the answers actually CONTRADICT each other or are merely different phrasings of COMPATIBLE information.
+
+Rules:
+- "compatible" = answers are semantically equivalent, one is more detailed than the other, or they provide complementary (non-contradictory) details
+  Examples: "70 users" vs "about 70 corporate users", "Microsoft 365" vs "M365 Business Premium", "Yes" vs "Yes, they use Duo"
+- "conflicting" = answers give genuinely different/incompatible facts
+  Examples: "70 users" vs "150 users", "Google Workspace" vs "Microsoft 365", "Yes" vs "No"
+
+Use the evidence to reason about WHY sources differ. Consider:
+- Are they describing the same thing with different levels of detail?
+- Is one source more specific or more recent?
+- Do the evidence quotes clarify ambiguities in the answer text?
+
+For COMPATIBLE answers, synthesize the best single answer by combining all available detail into one concise response. Do not just copy one answer — merge the information intelligently using the evidence to pick the most accurate details.
+  Example: "70 users" + "about 70 corporate users across 2 offices" → "Approximately 70 corporate users across 2 offices"
+
+## Fields to Review
+{json.dumps(review_items, indent=2)}
+
+Return a JSON array of objects with:
+- "field_key": the field key
+- "reasoning": 1-2 sentences explaining why the answers are compatible or conflicting, referencing the evidence
+- "verdict": "compatible" or "conflicting"
+- "best_answer": (only if compatible) a single synthesized answer combining the most complete and accurate information from all sources
+
+Return ONLY the JSON array, no other text."""
+
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            response = extractor.client.messages.create(
+                model=extractor.model,
+                max_tokens=4000,
+                system="You are a precise data quality reviewer for IT infrastructure information.",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            break
+        except anthropic.RateLimitError:
+            if attempt == max_retries - 1:
+                raise
+            wait = 2 ** attempt * 15
+            logger.warning(f"[RATE LIMIT] conflict resolution — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+            time.sleep(wait)
+
+    response_text = response.content[0].text.strip()
+    if response_text.startswith("```"):
+        response_text = response_text.split("\n", 1)[1]
+        response_text = response_text.rsplit("```", 1)[0]
+
+    try:
+        verdicts = json.loads(response_text)
+    except json.JSONDecodeError:
+        logger.warning("[CONFLICT] Failed to parse conflict resolution response, falling back to CONFLICTING")
+        return {key: False for key in conflict_fields}, {}
+
+    result: dict[str, bool] = {}
+    best_answers: dict[str, str] = {}
+    for v in verdicts:
+        is_compatible = v.get("verdict") == "compatible"
+        result[v["field_key"]] = is_compatible
+        if is_compatible and v.get("best_answer"):
+            best_answers[v["field_key"]] = v["best_answer"]
+        reasoning = v.get("reasoning", "")
+        logger.info(f"[CONFLICT] {v['field_key']}: {v.get('verdict')} — {reasoning}")
+
+    return result, best_answers
+
+
 def merge_answers(
     all_answers: dict[str, list[ExtractedAnswer]],
     hubspot_data: dict | None = None,
+    extractor: "RFIExtractor | None" = None,
 ) -> list[ExtractedAnswer]:
     """
     Merge answers from multiple sources into a single best answer per field.
@@ -485,9 +579,15 @@ def merge_answers(
     2. High-confidence transcript extractions
     3. Medium-confidence extractions
     4. Low-confidence extractions
+
+    If extractor is provided, uses LLM to distinguish real conflicts from
+    semantically equivalent answers. Otherwise falls back to literal string comparison.
     """
-    field_map = {f.key: f for f in RFI_FIELDS}
     merged: list[ExtractedAnswer] = []
+    # Collect fields with potential conflicts for batched LLM resolution
+    potential_conflicts: dict[str, list[ExtractedAnswer]] = {}
+    # Track which merged index maps to which conflict field
+    conflict_indices: dict[str, int] = {}
 
     for f in RFI_FIELDS:
         candidates = all_answers.get(f.key, [])
@@ -527,24 +627,72 @@ def merge_answers(
 
         best = real_answers[0]
 
-        # If multiple high-confidence answers exist, combine them
+        # If multiple high-confidence answers exist with different text, check for conflicts
         high_conf = [a for a in real_answers if a.confidence == Confidence.HIGH]
         if len(high_conf) > 1:
-            combined_sources = ", ".join(set(a.source for a in high_conf))
-            # Check for contradictions
             unique_answers = set(a.answer for a in high_conf if a.answer)
             if len(unique_answers) > 1:
+                # Defer resolution — add placeholder and batch for LLM review
+                conflict_indices[f.key] = len(merged)
+                potential_conflicts[f.key] = high_conf
+
+        merged.append(best)
+
+    # Batch-resolve all potential conflicts with a single LLM call
+    if potential_conflicts and extractor:
+        try:
+            verdicts, best_answers = _resolve_conflicts(potential_conflicts, extractor)
+        except Exception as e:
+            logger.warning(f"[CONFLICT] LLM resolution failed ({e}), falling back to CONFLICTING for all")
+            verdicts = {key: False for key in potential_conflicts}
+            best_answers = {}
+
+        for field_key, high_conf in potential_conflicts.items():
+            idx = conflict_indices[field_key]
+            combined_sources = ", ".join(set(a.source for a in high_conf))
+
+            if verdicts.get(field_key, False):
+                # Compatible — use LLM-synthesized answer, fall back to longest
+                answer = best_answers.get(field_key)
+                if not answer:
+                    answer = max(high_conf, key=lambda a: len(a.answer or "")).answer
+                combined_evidence = " / ".join(a.evidence for a in high_conf if a.evidence)
+                merged[idx] = ExtractedAnswer(
+                    field_key=field_key,
+                    question=high_conf[0].question,
+                    answer=answer,
+                    confidence=Confidence.HIGH,
+                    source=combined_sources,
+                    evidence=combined_evidence,
+                    row=high_conf[0].row,
+                )
+                logger.info(f"[MERGE] {field_key}: resolved as compatible → '{answer}'")
+            else:
+                # Real conflict — mark as CONFLICTING (existing behavior)
                 combined = " | ".join(f"[{a.source}]: {a.answer}" for a in high_conf)
-                best = ExtractedAnswer(
-                    field_key=f.key,
-                    question=f.question,
+                merged[idx] = ExtractedAnswer(
+                    field_key=field_key,
+                    question=high_conf[0].question,
                     answer=f"CONFLICTING: {combined}",
                     confidence=Confidence.MEDIUM,
                     source=combined_sources,
                     evidence=" / ".join(a.evidence for a in high_conf if a.evidence),
-                    row=f.row,
+                    row=high_conf[0].row,
                 )
-
-        merged.append(best)
+    elif potential_conflicts:
+        # No extractor available — fall back to old literal-string CONFLICTING behavior
+        for field_key, high_conf in potential_conflicts.items():
+            idx = conflict_indices[field_key]
+            combined_sources = ", ".join(set(a.source for a in high_conf))
+            combined = " | ".join(f"[{a.source}]: {a.answer}" for a in high_conf)
+            merged[idx] = ExtractedAnswer(
+                field_key=field_key,
+                question=high_conf[0].question,
+                answer=f"CONFLICTING: {combined}",
+                confidence=Confidence.MEDIUM,
+                source=combined_sources,
+                evidence=" / ".join(a.evidence for a in high_conf if a.evidence),
+                row=high_conf[0].row,
+            )
 
     return merged

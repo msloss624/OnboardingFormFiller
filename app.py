@@ -539,7 +539,7 @@ def step_extracting():
         }
 
     # Merge answers
-    merged = merge_answers(all_answers, hubspot_data)
+    merged = merge_answers(all_answers, hubspot_data, extractor=extractor)
 
     # Merge with baseline answers from saved file (if continuing from saved)
     baseline = st.session_state.get("baseline_answers", [])

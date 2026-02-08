@@ -168,7 +168,7 @@ async def _do_extraction(
                 "closedate": _format_date(context.get("close_date")),
             }
 
-        merged = merge_answers(all_answers, hubspot_data)
+        merged = merge_answers(all_answers, hubspot_data, extractor=extractor)
 
         # 6b. Confidence calibration — downgrade overconfident answers
         has_calibration_candidates = any(
