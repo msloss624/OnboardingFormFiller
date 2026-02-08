@@ -11,22 +11,29 @@ function TokenAcquirer({ children }: { children: ReactNode }) {
   const { instance, accounts } = useMsal();
 
   useEffect(() => {
-    if (!isAuthEnabled || accounts.length === 0) return;
+    if (!isAuthEnabled) return;
 
-    instance
-      .acquireTokenSilent({
-        scopes: [apiScope],
-        account: accounts[0],
-      })
-      .then((response) => {
-        setAuthToken(response.accessToken);
-      })
-      .catch(() => {
-        // Silent acquisition failed — trigger interactive login
-        instance.acquireTokenPopup({ scopes: [apiScope] }).then((response) => {
+    if (accounts.length > 0) {
+      // User has a session — try silent token acquisition
+      instance
+        .acquireTokenSilent({
+          scopes: [apiScope],
+          account: accounts[0],
+        })
+        .then((response) => {
           setAuthToken(response.accessToken);
+        })
+        .catch(() => {
+          instance.acquireTokenPopup({ scopes: [apiScope] }).then((response) => {
+            setAuthToken(response.accessToken);
+          });
         });
+    } else {
+      // No session — prompt user to log in
+      instance.acquireTokenPopup({ scopes: [apiScope] }).then((response) => {
+        setAuthToken(response.accessToken);
       });
+    }
   }, [instance, accounts]);
 
   return <>{children}</>;
