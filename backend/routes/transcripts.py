@@ -3,7 +3,7 @@ Transcript routes — search Fireflies transcripts by domain/emails.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.config import get_config
 from clients.fireflies_client import FirefliesClient
@@ -34,3 +34,20 @@ async def search_transcripts(
         }
         for s in summaries
     ]
+
+
+@router.get("/{transcript_id}")
+async def get_transcript(transcript_id: str):
+    ff = _get_fireflies()
+    try:
+        t = ff.get_full_transcript(transcript_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return {
+        "id": t.id,
+        "title": t.title,
+        "date": t.date,
+        "speakers": t.speakers,
+        "word_count": t.word_count,
+        "summary": t.summary,
+    }

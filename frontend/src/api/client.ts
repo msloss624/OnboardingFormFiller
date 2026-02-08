@@ -31,6 +31,11 @@ export async function searchTranscripts(domain: string, emails: string[]) {
   return data as Transcript[];
 }
 
+export async function getTranscriptById(id: string) {
+  const { data } = await api.get(`/transcripts/${id}`);
+  return data as Transcript;
+}
+
 // --- Runs ---
 
 export async function createRun(req: CreateRunRequest) {

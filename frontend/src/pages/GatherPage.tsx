@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   getDealContext,
   searchTranscripts,
+  getTranscriptById,
   createRun,
   uploadFile,
   getRun,
@@ -29,6 +30,9 @@ export default function GatherPage() {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [pasteUrl, setPasteUrl] = useState('');
+  const [pasteError, setPasteError] = useState('');
+  const [pasteLoading, setPasteLoading] = useState(false);
 
   useEffect(() => {
     if (!deal) {
@@ -84,6 +88,38 @@ export default function GatherPage() {
       alert('Failed to extract text from file. Please check the file and try again.');
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleAddByUrl() {
+    setPasteError('');
+    const url = pasteUrl.trim();
+    if (!url) return;
+
+    // Parse transcript ID from URL like https://app.fireflies.ai/view/Title::TRANSCRIPT_ID
+    const parts = url.split('::');
+    if (parts.length < 2) {
+      setPasteError('Invalid URL — expected format: https://app.fireflies.ai/view/...::TRANSCRIPT_ID');
+      return;
+    }
+    const transcriptId = parts[parts.length - 1];
+
+    // Check for duplicate
+    if (transcripts?.some((t) => t.id === transcriptId)) {
+      setPasteError('This transcript is already in the list.');
+      return;
+    }
+
+    setPasteLoading(true);
+    try {
+      const t = await getTranscriptById(transcriptId);
+      setTranscripts((prev) => (prev ? [...prev, t] : [t]));
+      setSelectedIds((prev) => new Set([...prev, t.id]));
+      setPasteUrl('');
+    } catch {
+      setPasteError('Transcript not found. Check the URL and try again.');
+    } finally {
+      setPasteLoading(false);
     }
   }
 
@@ -209,8 +245,32 @@ export default function GatherPage() {
             </p>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No transcripts found. You can still add content below.</p>
+          <p className="text-sm text-gray-500">No transcripts found. You can add one by URL below.</p>
         )}
+
+        {/* Add transcript by Fireflies URL */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <label className="block text-sm text-gray-600 mb-1">Add transcript by Fireflies URL</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={pasteUrl}
+              onChange={(e) => { setPasteUrl(e.target.value); setPasteError(''); }}
+              placeholder="https://app.fireflies.ai/view/Meeting-Title::TRANSCRIPT_ID"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
+            />
+            <button
+              onClick={handleAddByUrl}
+              disabled={pasteLoading || !pasteUrl.trim()}
+              className="rounded-md bg-[#1E4488] px-4 py-2 text-sm font-medium text-white hover:bg-[#2a5298] disabled:opacity-50"
+            >
+              {pasteLoading ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+          {pasteError && (
+            <p className="text-sm text-red-600 mt-1">{pasteError}</p>
+          )}
+        </div>
       </div>
 
       {/* Additional content */}
