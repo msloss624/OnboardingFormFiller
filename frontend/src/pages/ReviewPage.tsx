@@ -31,7 +31,7 @@ function getCategory(row: number): string {
   if (row <= 75) return CATEGORIES[7];
   if (row <= 84) return CATEGORIES[8];
   if (row <= 98) return CATEGORIES[9];
-  if (row <= 102) return CATEGORIES[10];
+  if (row <= 103) return CATEGORIES[10];
   return CATEGORIES[11];
 }
 

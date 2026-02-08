@@ -5,12 +5,30 @@ returns structured answers with confidence scores and source references.
 from __future__ import annotations
 import json
 import logging
+import re
 import time
 import concurrent.futures
 import anthropic
 
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
+
+
+def _repair_json_array(text: str) -> str:
+    """Attempt to repair a truncated or malformed JSON array by keeping valid objects."""
+    # Find the opening bracket
+    start = text.find("[")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON array found", text, 0)
+
+    # Find the last complete object (ends with })
+    last_brace = text.rfind("}")
+    if last_brace == -1:
+        raise json.JSONDecodeError("No complete JSON object found", text, 0)
+
+    # Truncate after last complete object and close the array
+    repaired = text[start:last_brace + 1].rstrip().rstrip(",") + "]"
+    return repaired
 from schema.rfi_fields import RFI_FIELDS, RFIField, Category, Confidence, Source, get_fields_by_category, get_field_by_key
 
 
@@ -27,12 +45,20 @@ class ExtractedAnswer:
 
 SYSTEM_PROMPT = """You are an IT infrastructure analyst extracting specific information from sales call transcripts and documents for an RFI (Request for Information) form.
 
-Your job is to find answers to specific IT infrastructure questions from the provided text. For each question:
+These transcripts are from sales calls between an MSP (Bellwether Technology — the seller) and a prospective client. Your job is to extract information about the PROSPECT'S current IT environment, NOT what the MSP/Bellwether team plans to implement or recommends.
+
+CRITICAL: Distinguish between:
+- The PROSPECT's current state (what they have NOW) — this is what we want
+- The MSP/Bellwether's plans, recommendations, or offerings — ignore these as answers
+- Example: If a Bellwether rep says "We'll deploy Veeam for backups" — that is NOT the prospect's current backup solution
+- Example: If the prospect says "We use Datto for backups" — that IS the answer
+
+For each question:
 
 1. Search the text carefully for any mention of the relevant topic
-2. Extract the most specific, factual answer possible
+2. Extract the most specific, factual answer possible — from the PROSPECT's perspective
 3. Rate your confidence:
-   - "high" = explicitly stated with specific details (numbers, product names, etc.)
+   - "high" = explicitly stated by the prospect with specific details (numbers, product names, etc.)
    - "medium" = mentioned but vague, or inferred from context
    - "low" = very indirect reference, educated guess based on surrounding context
    - "missing" = not mentioned at all in the provided text
@@ -123,7 +149,13 @@ class RFIExtractor:
         elapsed = time.time() - start
         logger.info(f"[EXTRACT DONE] {source_name} — {elapsed:.1f}s")
 
-        raw = json.loads(response_text)
+        try:
+            raw = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to repair: strip trailing garbage after last complete object
+            logger.warning(f"[JSON REPAIR] {source_name} — attempting repair")
+            fixed = _repair_json_array(response_text)
+            raw = json.loads(fixed)
         field_map = {f.key: f for f in fields}
 
         answers = []
@@ -162,18 +194,26 @@ class RFIExtractor:
                 chunk_name = source_name if len(chunks) == 1 else f"{source_name} (part {i+1})"
                 jobs.append((chunk_name, chunk))
 
+        # Sort smallest first to spread token consumption evenly and avoid rate limits
+        jobs.sort(key=lambda j: len(j[1]))
+
         all_answers: dict[str, list[ExtractedAnswer]] = {}
 
         logger.info(f"[PARALLEL] Launching {len(jobs)} extraction jobs")
         total_start = time.time()
         # Run extraction jobs in parallel (capped at 3 to avoid API rate limits)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 3) or 1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 2) or 1) as executor:
             futures = {
                 executor.submit(self.extract_from_text, text, name, fields): name
                 for name, text in jobs
             }
             for future in concurrent.futures.as_completed(futures):
-                answers = future.result()
+                name = futures[future]
+                try:
+                    answers = future.result()
+                except Exception as e:
+                    logger.error(f"[EXTRACT FAIL] {name} — {e}")
+                    continue
                 for a in answers:
                     all_answers.setdefault(a.field_key, []).append(a)
 

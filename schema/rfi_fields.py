@@ -168,15 +168,9 @@ RFI_FIELDS: list[RFIField] = [
     # Row 19 = category header
     RFIField(
         row=20, key="current_support",
-        question="What is the current support type, quantity, and cadence?",
+        question="Who is the incumbent provider and what is the current scope of services?",
         category=Category.CURRENT_STATE,
-        extraction_hint="Current MSP name, support tier, SLA, response time, support hours, contract type, per-user pricing",
-    ),
-    RFIField(
-        row=21, key="msp_cooperation",
-        question="Is the outgoing MSP cooperative with the transition?",
-        category=Category.CURRENT_STATE,
-        extraction_hint="Outgoing MSP cooperation, transition support, data handoff, hostile MSP, willing to help, responsive, unresponsive, holding data hostage",
+        extraction_hint="Current MSP name, incumbent provider, scope of services, what they manage, support tier, SLA, response time, support hours, contract type",
     ),
     RFIField(
         row=22, key="existing_rmm_psa",
