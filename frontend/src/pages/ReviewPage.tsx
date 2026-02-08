@@ -21,17 +21,17 @@ const CATEGORIES = [
 
 // Map field keys to categories based on row ranges
 function getCategory(row: number): string {
-  if (row <= 11) return CATEGORIES[0];
-  if (row <= 18) return CATEGORIES[1];
-  if (row <= 25) return CATEGORIES[2];
-  if (row <= 33) return CATEGORIES[3];
-  if (row <= 44) return CATEGORIES[4];
-  if (row <= 53) return CATEGORIES[5];
-  if (row <= 65) return CATEGORIES[6];
-  if (row <= 75) return CATEGORIES[7];
-  if (row <= 84) return CATEGORIES[8];
-  if (row <= 98) return CATEGORIES[9];
-  if (row <= 103) return CATEGORIES[10];
+  if (row <= 10) return CATEGORIES[0];
+  if (row <= 16) return CATEGORIES[1];
+  if (row <= 21) return CATEGORIES[2];
+  if (row <= 28) return CATEGORIES[3];
+  if (row <= 34) return CATEGORIES[4];
+  if (row <= 39) return CATEGORIES[5];
+  if (row <= 47) return CATEGORIES[6];
+  if (row <= 54) return CATEGORIES[7];
+  if (row <= 60) return CATEGORIES[8];
+  if (row <= 70) return CATEGORIES[9];
+  if (row <= 75) return CATEGORIES[10];
   return CATEGORIES[11];
 }
 
