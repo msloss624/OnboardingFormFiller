@@ -68,6 +68,5 @@ jobs:
         id: deploy-to-webapp
         with:
           app-name: 'OnboardingFormFiller'
-          slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_4CD04E2A4503411DBB13FEA5F87A5F5A }}
           startup-command: 'uvicorn backend.main:app --host 0.0.0.0 --port 8000'
