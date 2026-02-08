@@ -16,6 +16,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          VITE_AZURE_CLIENT_ID: ${{ vars.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_TENANT_ID: ${{ vars.VITE_AZURE_TENANT_ID }}
+          VITE_API_SCOPE: ${{ vars.VITE_API_SCOPE }}
+
       - name: Set up Python version
         uses: actions/setup-python@v5
         with:
@@ -34,6 +49,9 @@ jobs:
           path: |
             .
             !antenv/
+            !frontend/node_modules/
+            !frontend/src/
+            !.git/
 
   deploy:
     runs-on: ubuntu-latest
