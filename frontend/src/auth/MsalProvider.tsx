@@ -6,6 +6,8 @@ import { msalConfig, apiScope, isAuthEnabled } from './msalConfig';
 import { setAuthToken } from '../api/client';
 
 const msalInstance = new PublicClientApplication(msalConfig);
+// MSAL v5 requires explicit initialization before any operations
+const msalReady = isAuthEnabled ? msalInstance.initialize() : Promise.resolve();
 
 function TokenAcquirer({ children }: { children: ReactNode }) {
   const { instance, accounts } = useMsal();
@@ -17,35 +19,37 @@ function TokenAcquirer({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Handle redirect response first (user returning from login)
-    instance.handleRedirectPromise().then((response) => {
-      if (response) {
-        setAuthToken(response.accessToken);
-        setReady(true);
-        return;
-      }
+    msalReady
+      .then(() => instance.handleRedirectPromise())
+      .then((response) => {
+        if (response) {
+          setAuthToken(response.accessToken);
+          setReady(true);
+          return;
+        }
 
-      if (accounts.length > 0) {
-        // User has a session — try silent token acquisition
-        instance
-          .acquireTokenSilent({
-            scopes: [apiScope],
-            account: accounts[0],
-          })
-          .then((resp) => {
-            setAuthToken(resp.accessToken);
-            setReady(true);
-          })
-          .catch((error) => {
-            if (error instanceof InteractionRequiredAuthError) {
-              instance.acquireTokenRedirect({ scopes: [apiScope] });
-            }
-          });
-      } else {
-        // No session — redirect to Microsoft login
-        instance.acquireTokenRedirect({ scopes: [apiScope] });
-      }
-    });
+        if (accounts.length > 0) {
+          return instance
+            .acquireTokenSilent({
+              scopes: [apiScope],
+              account: accounts[0],
+            })
+            .then((resp) => {
+              setAuthToken(resp.accessToken);
+              setReady(true);
+            })
+            .catch((error) => {
+              if (error instanceof InteractionRequiredAuthError) {
+                return instance.acquireTokenRedirect({ scopes: [apiScope] });
+              }
+            });
+        } else {
+          return instance.acquireTokenRedirect({ scopes: [apiScope] });
+        }
+      })
+      .catch((err) => {
+        console.error('MSAL auth error:', err);
+      });
   }, [instance, accounts]);
 
   if (!ready) return null;
