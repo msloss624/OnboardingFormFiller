@@ -109,21 +109,36 @@ async def _do_extraction(
 
         # 2. Fetch selected transcripts from Fireflies (in parallel)
         sources: list[tuple[str, str]] = []
+        source_dates: dict[str, str] = {}  # source_name → ISO date
         if transcript_ids:
             ff = FirefliesClient(config.fireflies_api_key)
             import concurrent.futures
 
             def fetch_transcript(tid: str):
                 t = ff.get_full_transcript(tid)
-                date_str = str(t.date)[:10] if isinstance(t.date, str) else "Recent" if t.date else "N/A"
-                return (f"Transcript: {t.title} ({date_str})", t.full_text)
+                # Fireflies returns date as epoch ms (int) or ISO string
+                iso_date = None
+                if isinstance(t.date, str) and len(t.date) >= 10:
+                    date_str = t.date[:10]
+                    iso_date = date_str
+                elif isinstance(t.date, (int, float)) and t.date > 0:
+                    dt = datetime.fromtimestamp(t.date / 1000, tz=timezone.utc)
+                    date_str = dt.strftime("%Y-%m-%d")
+                    iso_date = date_str
+                else:
+                    date_str = "Recent" if t.date else "N/A"
+                source_name = f"Transcript: {t.title} ({date_str})"
+                return (source_name, t.full_text, iso_date)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(transcript_ids), 5)) as executor:
                 futures = {executor.submit(fetch_transcript, tid): tid for tid in transcript_ids}
                 for future in concurrent.futures.as_completed(futures):
                     tid = futures[future]
                     try:
-                        sources.append(future.result())
+                        name, text, iso_date = future.result()
+                        sources.append((name, text))
+                        if iso_date:
+                            source_dates[name] = iso_date
                     except Exception as e:
                         logger.warning(f"Failed to fetch transcript {tid}: {e}")
 
@@ -168,15 +183,19 @@ async def _do_extraction(
                 "closedate": _format_date(context.get("close_date")),
             }
 
-        merged = merge_answers(all_answers, hubspot_data, extractor=extractor)
+        merged = merge_answers(all_answers, hubspot_data, extractor=extractor,
+                               source_dates=source_dates)
 
-        # 6b. Confidence calibration — downgrade overconfident answers
-        has_calibration_candidates = any(
-            a.confidence in (Confidence.HIGH, Confidence.MEDIUM) and a.evidence and a.answer
-            for a in merged
-        )
-        if has_calibration_candidates:
-            merged = extractor.calibrate_confidence(merged)
+        # 6a. Second-pass extraction for weak fields (MISSING + LOW)
+        merged = extractor.retry_weak_fields(merged, sources)
+
+        # 6b. Combined calibration + refinement (single Sonnet pass)
+        has_review_candidates = sum(
+            1 for a in merged
+            if a.confidence != Confidence.MISSING and a.answer
+        ) >= 3
+        if has_review_candidates:
+            merged = extractor.calibrate_and_refine(merged)
 
         # 7. Merge with baseline (if continuing from a previous run)
         if baseline_run_id:
@@ -303,7 +322,12 @@ def retry_single_field(
         for tid in transcript_ids:
             try:
                 t = ff.get_full_transcript(tid)
-                date_str = str(t.date)[:10] if isinstance(t.date, str) else "Recent" if t.date else "N/A"
+                if isinstance(t.date, str) and len(t.date) >= 10:
+                    date_str = t.date[:10]
+                elif isinstance(t.date, (int, float)) and t.date > 0:
+                    date_str = datetime.fromtimestamp(t.date / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                else:
+                    date_str = "Recent" if t.date else "N/A"
                 sources.append((f"Transcript: {t.title} ({date_str})", t.full_text))
             except Exception as e:
                 logger.warning(f"Failed to fetch transcript {tid}: {e}")

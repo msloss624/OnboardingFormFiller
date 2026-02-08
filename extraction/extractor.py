@@ -397,6 +397,265 @@ Return ONLY the JSON array, no other text."""
             logger.info(f"[CALIBRATE] Downgraded {downgraded_count} answers")
         return calibrated
 
+    def calibrate_and_refine(
+        self,
+        answers: list[ExtractedAnswer],
+    ) -> list[ExtractedAnswer]:
+        """Combined confidence calibration and cross-field refinement in a single Sonnet call.
+
+        Reviews all filled answers together — evaluates evidence quality for
+        confidence scoring AND cross-field consistency in one pass, so the model
+        has full context for both tasks.
+        """
+        filled = [
+            a for a in answers
+            if a.confidence != Confidence.MISSING and a.answer
+        ]
+        if len(filled) < 3:
+            return answers
+
+        review_items = []
+        for a in filled:
+            review_items.append({
+                "field_key": a.field_key,
+                "question": a.question,
+                "answer": a.answer,
+                "confidence": a.confidence.value,
+                "evidence": (a.evidence or "")[:500],
+            })
+
+        prompt = f"""You are reviewing a complete set of extracted answers from an IT onboarding RFI form. All answers were extracted from sales call transcripts and CRM data about a single prospect.
+
+Perform TWO tasks in a single review:
+
+## Task 1: Confidence Calibration
+For each answer, evaluate whether the evidence supports the stated confidence level:
+- "high" requires explicit, specific, unambiguous evidence (exact numbers, product names, clear statements)
+- "medium" is for vague mentions, indirect references, or inferred context
+- "low" is for very indirect or barely supportive evidence
+- Downgrade confidence when evidence is weaker than the stated level
+
+## Task 2: Cross-Field Consistency
+Review all answers holistically:
+1. Flag internal inconsistencies between related fields (e.g., user count vs mailbox count vs device count should be plausible relative to each other)
+2. Improve vague answers using context from other fields (e.g., if "applications" mentions "QuickBooks Enterprise" and "server_inventory" mentions "QuickBooks SQL server", either answer could be enriched)
+3. Resolve answers that contradict other high-confidence answers — use context to determine which is correct
+
+## Current Answers
+{json.dumps(review_items, indent=2)}
+
+Return a JSON array of objects for ONLY the fields you want to revise. Each object:
+- "field_key": the field key
+- "revised_answer": the improved answer text (or same text if only changing confidence)
+- "revised_confidence": "high", "medium", or "low"
+- "reasoning": 1-2 sentences explaining the change (evidence quality issue, cross-field insight, or both)
+
+If no revisions are needed for a field, omit it entirely.
+Return ONLY the JSON array, no other text."""
+
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=8000,
+                    system="You are a precise quality assurance reviewer for IT infrastructure data extraction. Only suggest revisions when you have clear justification from the evidence or cross-field context — do not speculate or invent information.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                break
+            except anthropic.RateLimitError:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt * 15
+                logger.warning(f"[RATE LIMIT] calibrate_and_refine — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+
+        response_text = response.content[0].text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1]
+            response_text = response_text.rsplit("```", 1)[0]
+
+        try:
+            revisions = json.loads(response_text)
+        except json.JSONDecodeError:
+            logger.warning("[CALIBRATE+REFINE] Failed to parse response, skipping")
+            return answers
+
+        if not revisions:
+            logger.info("[CALIBRATE+REFINE] No revisions suggested")
+            return answers
+
+        # Apply revisions
+        revision_map: dict[str, dict] = {}
+        for rev in revisions:
+            revision_map[rev["field_key"]] = rev
+
+        result = []
+        revision_count = 0
+        for a in answers:
+            if a.field_key in revision_map:
+                rev = revision_map[a.field_key]
+                new_answer = rev.get("revised_answer", a.answer)
+                new_confidence = Confidence(rev.get("revised_confidence", a.confidence.value))
+                answer_changed = new_answer != a.answer
+                conf_changed = new_confidence != a.confidence
+                if answer_changed or conf_changed:
+                    parts = []
+                    if conf_changed:
+                        parts.append(f"confidence {a.confidence.value} → {new_confidence.value}")
+                    if answer_changed:
+                        parts.append(f"answer revised")
+                    logger.info(f"[CALIBRATE+REFINE] {a.field_key}: {', '.join(parts)} ({rev.get('reasoning', '')})")
+                    a.answer = new_answer
+                    a.confidence = new_confidence
+                    revision_count += 1
+            result.append(a)
+
+        logger.info(f"[CALIBRATE+REFINE] Applied {revision_count} revisions")
+        return result
+
+    def refine_answers(
+        self,
+        answers: list[ExtractedAnswer],
+    ) -> list[ExtractedAnswer]:
+        """Review all filled answers together for cross-field consistency and enrichment."""
+        filled = [
+            a for a in answers
+            if a.confidence != Confidence.MISSING and a.answer
+        ]
+        if len(filled) < 3:
+            return answers
+
+        review_items = []
+        for a in filled:
+            review_items.append({
+                "field_key": a.field_key,
+                "question": a.question,
+                "answer": a.answer,
+                "confidence": a.confidence.value,
+            })
+
+        prompt = f"""You are reviewing a complete set of extracted answers from an IT onboarding RFI form. All answers below were extracted from sales call transcripts and CRM data about a single prospect.
+
+Review the answers holistically and identify opportunities to:
+1. Flag internal inconsistencies between related fields (e.g., user count vs mailbox count vs device count — these should be plausible relative to each other)
+2. Improve vague answers using context from other fields (e.g., if "applications" mentions "QuickBooks Enterprise" and "server_inventory" mentions "QuickBooks SQL server", either answer could be enriched)
+3. Downgrade confidence on answers that contradict other high-confidence answers
+
+## Current Answers
+{json.dumps(review_items, indent=2)}
+
+Return a JSON array of objects for ONLY the fields you want to revise. Each object:
+- "field_key": the field key
+- "revised_answer": the improved answer text
+- "revised_confidence": "high", "medium", or "low"
+- "reasoning": 1-2 sentences explaining the revision
+
+If no revisions are needed, return an empty array [].
+Return ONLY the JSON array, no other text."""
+
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=4000,
+                    system="You are a precise quality assurance reviewer for IT infrastructure data extraction. Only suggest revisions when you have clear evidence from the other answers — do not speculate.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                break
+            except anthropic.RateLimitError:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt * 15
+                logger.warning(f"[RATE LIMIT] refinement — waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+
+        response_text = response.content[0].text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1]
+            response_text = response_text.rsplit("```", 1)[0]
+
+        try:
+            revisions = json.loads(response_text)
+        except json.JSONDecodeError:
+            logger.warning("[REFINE] Failed to parse refinement response, skipping")
+            return answers
+
+        if not revisions:
+            logger.info("[REFINE] No revisions suggested")
+            return answers
+
+        # Build revision map
+        revision_map: dict[str, dict] = {}
+        for rev in revisions:
+            revision_map[rev["field_key"]] = rev
+
+        # Apply revisions
+        refined = []
+        revision_count = 0
+        for a in answers:
+            if a.field_key in revision_map:
+                rev = revision_map[a.field_key]
+                logger.info(f"[REFINE] {a.field_key}: '{a.answer}' → '{rev['revised_answer']}' ({rev['reasoning']})")
+                a.answer = rev["revised_answer"]
+                a.confidence = Confidence(rev["revised_confidence"])
+                revision_count += 1
+            refined.append(a)
+
+        if revision_count:
+            logger.info(f"[REFINE] Applied {revision_count} revisions")
+        return refined
+
+    def retry_weak_fields(
+        self,
+        merged: list[ExtractedAnswer],
+        sources: list[tuple[str, str]],
+    ) -> list[ExtractedAnswer]:
+        """Second-pass extraction for MISSING and LOW-confidence fields.
+
+        Re-extracts with only the weak fields in the prompt, giving the model
+        more attention per field. Improvements are merged back — only upgrades
+        are accepted (won't overwrite a real answer with MISSING).
+        """
+        weak_keys = set()
+        for a in merged:
+            if a.confidence in (Confidence.MISSING, Confidence.LOW):
+                weak_keys.add(a.field_key)
+
+        if not weak_keys:
+            logger.info("[RETRY] No weak fields to retry")
+            return merged
+
+        weak_fields = [f for f in RFI_FIELDS if f.key in weak_keys and f.primary_sources != [Source.MANUAL]]
+        if not weak_fields:
+            return merged
+
+        logger.info(f"[RETRY] Re-extracting {len(weak_fields)} weak fields (MISSING + LOW)")
+
+        retry_answers = self.extract_from_multiple_sources(sources, fields=weak_fields)
+
+        # Merge improvements back — only accept upgrades
+        priority = {Confidence.HIGH: 0, Confidence.MEDIUM: 1, Confidence.LOW: 2, Confidence.MISSING: 3}
+        upgraded_count = 0
+        for i, a in enumerate(merged):
+            if a.field_key not in retry_answers:
+                continue
+            candidates = retry_answers[a.field_key]
+            real = [c for c in candidates if c.confidence != Confidence.MISSING and c.answer]
+            if not real:
+                continue
+            real.sort(key=lambda c: priority.get(c.confidence, 3))
+            best = real[0]
+            # Only upgrade — don't replace a filled answer with a worse one
+            if priority.get(best.confidence, 3) < priority.get(a.confidence, 3):
+                logger.info(f"[RETRY] {a.field_key}: {a.confidence.value} → {best.confidence.value} ('{best.answer[:80]}')")
+                merged[i] = best
+                upgraded_count += 1
+
+        logger.info(f"[RETRY] Upgraded {upgraded_count} of {len(weak_fields)} weak fields")
+        return merged
+
     def _chunk_text(self, text: str, max_chars: int = 80000) -> list[str]:
         """Split long text into chunks, respecting speaker turn boundaries for transcripts."""
         if len(text) <= max_chars:
@@ -476,6 +735,7 @@ Return ONLY the JSON array, no other text."""
 def _resolve_conflicts(
     conflict_fields: dict[str, list[ExtractedAnswer]],
     extractor: "RFIExtractor",
+    source_dates: dict[str, str] | None = None,
 ) -> tuple[dict[str, bool], dict[str, str]]:
     """Use LLM to determine which field conflicts are real contradictions vs compatible answers.
 
@@ -483,6 +743,7 @@ def _resolve_conflicts(
     - verdicts maps field_key -> True if compatible, False if conflicting
     - best_answers maps field_key -> synthesized best answer string (only for compatible fields)
     """
+    _dates = source_dates or {}
     review_items = []
     for field_key, answers in conflict_fields.items():
         review_items.append({
@@ -493,6 +754,7 @@ def _resolve_conflicts(
                     "source": a.source,
                     "answer": a.answer,
                     "evidence": (a.evidence or "")[:500],
+                    "date": _dates.get(a.source, "unknown"),
                 }
                 for a in answers
             ],
@@ -510,6 +772,8 @@ Use the evidence to reason about WHY sources differ. Consider:
 - Are they describing the same thing with different levels of detail?
 - Is one source more specific or more recent?
 - Do the evidence quotes clarify ambiguities in the answer text?
+
+Each answer includes a "date" field. When answers are compatible, prefer details from the most recent source. When answers conflict, note the dates — newer information from the prospect generally supersedes older statements.
 
 For COMPATIBLE answers, synthesize the best single answer by combining all available detail into one concise response. Do not just copy one answer — merge the information intelligently using the evidence to pick the most accurate details.
   Example: "70 users" + "about 70 corporate users across 2 offices" → "Approximately 70 corporate users across 2 offices"
@@ -529,7 +793,7 @@ Return ONLY the JSON array, no other text."""
     for attempt in range(max_retries):
         try:
             response = extractor.client.messages.create(
-                model=extractor.model,
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=4000,
                 system="You are a precise data quality reviewer for IT infrastructure information.",
                 messages=[{"role": "user", "content": prompt}],
@@ -570,6 +834,7 @@ def merge_answers(
     all_answers: dict[str, list[ExtractedAnswer]],
     hubspot_data: dict | None = None,
     extractor: "RFIExtractor | None" = None,
+    source_dates: dict[str, str] | None = None,
 ) -> list[ExtractedAnswer]:
     """
     Merge answers from multiple sources into a single best answer per field.
@@ -641,7 +906,7 @@ def merge_answers(
     # Batch-resolve all potential conflicts with a single LLM call
     if potential_conflicts and extractor:
         try:
-            verdicts, best_answers = _resolve_conflicts(potential_conflicts, extractor)
+            verdicts, best_answers = _resolve_conflicts(potential_conflicts, extractor, source_dates)
         except Exception as e:
             logger.warning(f"[CONFLICT] LLM resolution failed ({e}), falling back to CONFLICTING for all")
             verdicts = {key: False for key in potential_conflicts}
