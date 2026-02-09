@@ -45,10 +45,13 @@ def upload_excel(blob_path: str, file_bytes: bytes) -> str:
     if service:
         container = _ensure_container(service)
         blob = container.get_blob_client(blob_path)
+        from azure.storage.blob import ContentSettings
         blob.upload_blob(
             file_bytes,
             overwrite=True,
-            content_settings={"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            content_settings=ContentSettings(
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
         )
         logger.info(f"Uploaded to blob: {blob_path}")
         return blob_path
