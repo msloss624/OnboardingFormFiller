@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { MsalProvider as MsalReactProvider, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { msalConfig, apiScope, isAuthEnabled } from './msalConfig';
-import { setAuthToken } from '../api/client';
+import { setAuthToken, setTokenAcquirer } from '../api/client';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 // MSAL v5 requires explicit initialization before any operations
@@ -24,25 +24,19 @@ function TokenAcquirer({ children }: { children: ReactNode }) {
       .then((response) => {
         if (response) {
           setAuthToken(response.accessToken);
-          setReady(true);
-          return;
         }
 
-        if (accounts.length > 0) {
-          return instance
-            .acquireTokenSilent({
+        const currentAccounts = instance.getAllAccounts();
+        if (currentAccounts.length > 0) {
+          // Register interceptor that gets a fresh token for every API call
+          setTokenAcquirer(async () => {
+            const resp = await instance.acquireTokenSilent({
               scopes: [apiScope],
-              account: accounts[0],
-            })
-            .then((resp) => {
-              setAuthToken(resp.accessToken);
-              setReady(true);
-            })
-            .catch((error) => {
-              if (error instanceof InteractionRequiredAuthError) {
-                return instance.acquireTokenRedirect({ scopes: [apiScope] });
-              }
+              account: currentAccounts[0],
             });
+            return resp.accessToken;
+          });
+          setReady(true);
         } else {
           return instance.acquireTokenRedirect({ scopes: [apiScope] });
         }

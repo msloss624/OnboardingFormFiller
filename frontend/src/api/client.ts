@@ -10,6 +10,22 @@ export function setAuthToken(token: string) {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 }
 
+// Token acquisition function set by MsalProvider — used by interceptor
+// to get a fresh token before every API call
+let acquireToken: (() => Promise<string>) | null = null;
+
+export function setTokenAcquirer(fn: () => Promise<string>) {
+  acquireToken = fn;
+}
+
+api.interceptors.request.use(async (config) => {
+  if (acquireToken) {
+    const token = await acquireToken();
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // --- Deals ---
 
 export async function searchDeals(query: string) {
