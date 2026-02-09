@@ -58,4 +58,5 @@ class Run(Base):
     __table_args__ = (
         Index("idx_runs_deal", "deal_id"),
         Index("idx_runs_user", "user_id"),
+        Index("idx_runs_created", "created_at"),
     )

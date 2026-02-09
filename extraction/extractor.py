@@ -202,7 +202,7 @@ class RFIExtractor:
         logger.info(f"[PARALLEL] Launching {len(jobs)} extraction jobs")
         total_start = time.time()
         # Run extraction jobs in parallel (capped at 3 to avoid API rate limits)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 2) or 1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(jobs), 4) or 1) as executor:
             futures = {
                 executor.submit(self.extract_from_text, text, name, fields): name
                 for name, text in jobs

@@ -71,6 +71,20 @@ async def create_run(
 
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc"}
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+def _parse_file(contents: bytes, ext: str) -> str:
+    """Parse PDF or Word document bytes into text (runs in thread)."""
+    if ext == ".pdf":
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(contents))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    elif ext in (".docx", ".doc"):
+        from docx import Document
+        doc = Document(io.BytesIO(contents))
+        return "\n".join(p.text for p in doc.paragraphs)
+    raise ValueError(f"Unsupported: {ext}")
 
 
 @router.post("/upload")
@@ -83,19 +97,10 @@ async def upload_file(file: UploadFile, _user=Depends(get_current_user)):
         raise HTTPException(400, f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
 
     contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(400, "File too large (max 20 MB)")
 
-    if ext == ".pdf":
-        from pypdf import PdfReader
-
-        reader = PdfReader(io.BytesIO(contents))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    elif ext in (".docx", ".doc"):
-        from docx import Document
-
-        doc = Document(io.BytesIO(contents))
-        text = "\n".join(p.text for p in doc.paragraphs)
-    else:
-        raise HTTPException(400, "Unsupported file type")
+    text = await asyncio.to_thread(_parse_file, contents, ext)
 
     return {"filename": filename, "text": text.strip()}
 
