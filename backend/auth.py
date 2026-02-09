@@ -39,23 +39,42 @@ def _decode_token(token: str) -> dict:
 
     config = get_config()
     tenant_id = config.azure_ad_tenant_id
-    audience = config.azure_ad_audience or config.azure_ad_client_id
+    client_id = config.azure_ad_client_id
 
     jwks = _get_jwks(tenant_id)
-    issuer = f"https://login.microsoftonline.com/{tenant_id}/v2.0"
 
+    # Accept both v1 and v2 issuer formats
+    issuers = [
+        f"https://login.microsoftonline.com/{tenant_id}/v2.0",
+        f"https://sts.windows.net/{tenant_id}/",
+    ]
+    # Accept both plain client ID and api:// prefixed audience
+    audiences = [client_id, f"api://{client_id}"]
+
+    # Log unverified claims for debugging
     try:
-        payload = jwt.decode(
-            token,
-            jwks,
-            algorithms=["RS256"],
-            audience=audience,
-            issuer=issuer,
-        )
-        return payload
-    except JWTError as e:
-        logger.warning(f"JWT validation failed: {e}")
-        raise HTTPException(401, "Invalid or expired token")
+        unverified = jwt.get_unverified_claims(token)
+        logger.info(f"Token iss={unverified.get('iss')}, aud={unverified.get('aud')}")
+    except Exception:
+        pass
+
+    for issuer in issuers:
+        for audience in audiences:
+            try:
+                payload = jwt.decode(
+                    token,
+                    jwks,
+                    algorithms=["RS256"],
+                    audience=audience,
+                    issuer=issuer,
+                )
+                return payload
+            except JWTError:
+                continue
+
+    # All combinations failed — log and raise
+    logger.warning("JWT validation failed: no valid issuer/audience combination")
+    raise HTTPException(401, "Invalid or expired token")
 
 
 async def _upsert_user(db: AsyncSession, claims: dict) -> User:
