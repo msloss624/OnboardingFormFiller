@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { MsalProvider as MsalReactProvider, useMsal } from '@azure/msal-react';
-import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { PublicClientApplication } from '@azure/msal-browser';
 import { msalConfig, apiScope, isAuthEnabled } from './msalConfig';
 import { setAuthToken, setTokenAcquirer } from '../api/client';
 
