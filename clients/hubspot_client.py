@@ -232,13 +232,16 @@ class HubSpotClient:
 
     def get_owner_name(self, owner_id: str) -> str | None:
         """Get the display name of a HubSpot owner by ID."""
-        resp = self.client.get(f"/crm/v3/owners/{owner_id}")
-        if resp.status_code != 200:
+        try:
+            resp = self.client.get(f"/crm/v3/owners/{owner_id}")
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            first = data.get("firstName", "")
+            last = data.get("lastName", "")
+            return f"{first} {last}".strip() or None
+        except Exception:
             return None
-        data = resp.json()
-        first = data.get("firstName", "")
-        last = data.get("lastName", "")
-        return f"{first} {last}".strip() or None
 
     # ── Deals (detail) ────────────────────────────────────────────────
 
@@ -274,8 +277,6 @@ class HubSpotClient:
 
         company.contacts = contacts
 
-        owner_id = deal_props.get("hubspot_owner_id")
-        deal_owner = self.get_owner_name(owner_id) if owner_id else None
         close_date = deal_props.get("closedate")
 
         return {
@@ -283,7 +284,7 @@ class HubSpotClient:
             "contacts": contacts,
             "notes": notes,
             "client_domain": company.client_domain,
-            "deal_owner": deal_owner,
+            "deal_owner": None,
             "close_date": close_date,
         }
 
