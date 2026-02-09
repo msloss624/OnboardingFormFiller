@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { listRuns, getExcelUrl, deleteRun, type RunSummary } from '../api/client';
+import { listRuns, downloadExcel, deleteRun, type RunSummary } from '../api/client';
 
 export default function HistoryPage() {
   const [searchParams] = useSearchParams();
@@ -76,12 +76,12 @@ export default function HistoryPage() {
                     >
                       Review
                     </button>
-                    <a
-                      href={getExcelUrl(run.id)}
+                    <button
+                      onClick={() => downloadExcel(run.id)}
                       className="text-sm text-[#F78E28] hover:underline"
                     >
                       Download
-                    </a>
+                    </button>
                   </>
                 )}
                 <button

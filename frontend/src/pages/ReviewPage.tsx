@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getRun, updateAnswers, getExcelUrl, retryField, type Run, type Answer } from '../api/client';
+import { getRun, updateAnswers, downloadExcel, retryField, type Run, type Answer } from '../api/client';
 import AnswerEditor from '../components/AnswerEditor';
 
 // Field categories in display order
@@ -194,12 +194,12 @@ export default function ReviewPage() {
         >
           {saving ? 'Saving...' : 'Save Edits'}
         </button>
-        <a
-          href={getExcelUrl(run.id)}
-          className="rounded-lg bg-[#1E4488] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298] inline-block text-center"
+        <button
+          onClick={() => downloadExcel(run.id)}
+          className="rounded-lg bg-[#1E4488] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298]"
         >
           Download Excel
-        </a>
+        </button>
       </div>
     </div>
   );

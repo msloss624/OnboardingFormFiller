@@ -94,8 +94,21 @@ export async function uploadFile(file: File) {
   return data as { filename: string; text: string };
 }
 
-export function getExcelUrl(runId: string) {
-  return `/api/runs/${runId}/excel`;
+export async function downloadExcel(runId: string) {
+  const { data, headers } = await api.get(`/runs/${runId}/excel`, {
+    responseType: 'blob',
+  });
+  const disposition = headers['content-disposition'] || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `run-${runId}.xlsx`;
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // --- Types ---
