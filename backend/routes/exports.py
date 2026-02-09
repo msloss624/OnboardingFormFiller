@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from backend.auth import get_current_user
 from backend.database import get_db
 from backend.models import Run
 from backend.storage import download_excel as storage_download, upload_excel
@@ -42,7 +43,7 @@ def _answers_from_json(answers_json: str) -> list[ExtractedAnswer]:
 
 
 @router.get("/{run_id}/excel")
-async def download_excel(run_id: str, db: AsyncSession = Depends(get_db)):
+async def download_excel(run_id: str, _user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Run).where(Run.id == run_id))
     run = result.scalar_one_or_none()
     if not run:
@@ -94,6 +95,7 @@ async def download_excel(run_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("")
 async def list_runs(
     deal_id: str = Query(None),
+    _user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Run).order_by(Run.created_at.desc())

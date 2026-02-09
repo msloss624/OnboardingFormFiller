@@ -74,7 +74,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc"}
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile):
+async def upload_file(file: UploadFile, _user=Depends(get_current_user)):
     """Extract text from an uploaded PDF or Word document."""
     filename = file.filename or "unknown"
     ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -101,7 +101,7 @@ async def upload_file(file: UploadFile):
 
 
 @router.get("/{run_id}")
-async def get_run(run_id: str, db: AsyncSession = Depends(get_db)):
+async def get_run(run_id: str, _user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Run).where(Run.id == run_id))
     run = result.scalar_one_or_none()
     if not run:
@@ -128,6 +128,7 @@ async def get_run(run_id: str, db: AsyncSession = Depends(get_db)):
 async def update_answers(
     run_id: str,
     body: AnswerUpdate,
+    _user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Run).where(Run.id == run_id))
@@ -141,7 +142,7 @@ async def update_answers(
 
 
 @router.delete("/{run_id}")
-async def delete_run(run_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_run(run_id: str, _user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Run).where(Run.id == run_id))
     run = result.scalar_one_or_none()
     if not run:
@@ -155,6 +156,7 @@ async def delete_run(run_id: str, db: AsyncSession = Depends(get_db)):
 async def retry_field(
     run_id: str,
     body: RetryFieldRequest,
+    _user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Re-extract a single field with a more aggressive prompt."""

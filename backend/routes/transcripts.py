@@ -3,8 +3,9 @@ Transcript routes — search Fireflies transcripts by domain/emails.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from backend.auth import get_current_user
 from backend.config import get_config
 from clients.fireflies_client import FirefliesClient
 
@@ -19,6 +20,7 @@ def _get_fireflies() -> FirefliesClient:
 async def search_transcripts(
     domain: str = Query(..., min_length=1),
     emails: str = Query(""),  # comma-separated emails
+    _user=Depends(get_current_user),
 ):
     ff = _get_fireflies()
     contact_emails = [e.strip() for e in emails.split(",") if e.strip()] if emails else []
@@ -37,7 +39,7 @@ async def search_transcripts(
 
 
 @router.get("/{transcript_id}")
-async def get_transcript(transcript_id: str):
+async def get_transcript(transcript_id: str, _user=Depends(get_current_user)):
     ff = _get_fireflies()
     try:
         t = ff.get_full_transcript(transcript_id)

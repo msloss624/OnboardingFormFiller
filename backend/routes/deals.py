@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
+from backend.auth import get_current_user
 from backend.config import get_config
 from clients.hubspot_client import HubSpotClient
 
@@ -16,7 +17,7 @@ def _get_hubspot() -> HubSpotClient:
 
 
 @router.get("/search")
-async def search_deals(q: str = Query(..., min_length=1)):
+async def search_deals(q: str = Query(..., min_length=1), _user=Depends(get_current_user)):
     hs = _get_hubspot()
     deals = hs.search_deals(q)
     return [
@@ -32,7 +33,7 @@ async def search_deals(q: str = Query(..., min_length=1)):
 
 
 @router.get("/{deal_id}/context")
-async def get_deal_context(deal_id: str):
+async def get_deal_context(deal_id: str, _user=Depends(get_current_user)):
     hs = _get_hubspot()
     ctx = hs.get_deal_context(deal_id)
     if "error" in ctx:

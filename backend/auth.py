@@ -51,13 +51,6 @@ def _decode_token(token: str) -> dict:
     # Accept both plain client ID and api:// prefixed audience
     audiences = [client_id, f"api://{client_id}"]
 
-    # Log unverified claims for debugging
-    try:
-        unverified = jwt.get_unverified_claims(token)
-        logger.info(f"Token iss={unverified.get('iss')}, aud={unverified.get('aud')}")
-    except Exception:
-        pass
-
     for issuer in issuers:
         for audience in audiences:
             try:
