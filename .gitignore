@@ -10,3 +10,4 @@ build/
 deploy.zip
 generated/
 onboarding.db
+test_output*.xlsx
