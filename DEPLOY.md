@@ -1,129 +1,104 @@
-# Deploying Onboarding Form Filler to Azure
+# Deploying Onboarding Form Filler
 
-## What you'll end up with
-A URL like `https://rfi-autofiller.azurewebsites.net` that you open in a browser.
-No local install needed. Just bookmark it.
+## Current Production Setup
+
+- **URL:** https://onboardingformfiller.azurewebsites.net
+- **Hosting:** Azure App Service (B1 Linux, Python 3.11)
+- **Region:** Canada Central
+- **Resource Group:** Sales_Automations
+- **Deploy method:** GitHub Actions with OIDC (push to `main`)
 
 ---
 
-## Option A: Azure App Service (Recommended — simplest)
+## How Deployment Works
 
-**Cost:** ~$13/month (B1 plan) or free tier available
-**Time:** ~15 minutes
+1. Push to `main` branch
+2. GitHub Actions workflow triggers automatically
+3. Builds frontend (Node 22) into `backend/static/`
+4. Packages backend (Python 3.11)
+5. Deploys via OIDC to Azure App Service
+6. Takes ~10 minutes total (build ~1 min, deploy ~9 min)
 
-### Step 1: Create a GitHub repo
-1. Go to github.com → New repository
-2. Name: `rfi-autofiller`, Private
-3. Push this entire folder to it:
-   ```bash
-   cd rfi-autofiller
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/YOUR_USERNAME/rfi-autofiller.git
-   git push -u origin main
-   ```
+No manual steps needed. Just push code.
 
-### Step 2: Create Azure resources
-Go to [Azure Portal](https://portal.azure.com):
+---
 
-1. **Create a Resource Group**
-   - Search "Resource groups" → Create
-   - Name: `rfi-autofiller-rg`
-   - Region: East US (or closest to you)
+## Azure Resources
 
-2. **Create a Web App**
-   - Search "App Services" → Create → Web App
-   - Name: `rfi-autofiller` (this becomes your URL)
-   - Resource Group: `rfi-autofiller-rg`
-   - Publish: **Docker Container**
-   - OS: **Linux**
-   - Region: same as above
-   - Pricing: **B1** ($13/mo) or **F1** (free, limited)
-   - Click Next until Docker tab
+| Resource | Name | Purpose |
+|----------|------|---------|
+| App Service Plan | OnboardingFormFiller-plan | B1 Linux (~$13/mo) |
+| App Service | OnboardingFormFiller | Hosts the app |
+| Storage Account | onboardingffstorage | Excel exports (container: `exports`) |
+| App Registration | OnboardingFormFiller | SSO + Graph API email |
+| Service Principal | OnboardingFormFiller-GitHubDeploy | OIDC for GitHub Actions |
 
-3. **Docker tab**
-   - Options: Single Container
-   - Image Source: GitHub Actions (or you can build locally)
-   - Skip this for now, we'll configure deployment next
+All resources are in the `Sales_Automations` resource group (canadacentral).
 
-   OR simpler: choose **Code** instead of Docker:
-   - Runtime stack: **Python 3.11**
-   - Startup command: `pip install -r requirements.txt && streamlit run app.py --server.port 8000 --server.address 0.0.0.0 --server.headless true`
+---
 
-### Step 3: Set environment variables
-In the Azure Portal → your App Service → **Configuration** → **Application settings**:
+## Environment Variables (Azure App Service)
 
-Add these:
+Set in Azure Portal > App Service > Configuration > Application settings:
+
 | Name | Value |
 |------|-------|
-| `HUBSPOT_API_KEY` | Your HubSpot private app token |
-| `FIREFLIES_API_KEY` | Your Fireflies API key |
-| `ANTHROPIC_API_KEY` | Your Anthropic API key |
-| `WEBSITES_PORT` | `8501` |
+| `HUBSPOT_API_KEY` | HubSpot Private App token |
+| `FIREFLIES_API_KEY` | Fireflies.ai API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `DATABASE_URL` | `sqlite+aiosqlite:////home/onboarding.db` |
+| `BLOB_CONNECTION_STRING` | Azure Blob connection string |
+| `AZURE_AD_TENANT_ID` | `a9f513ef-aa6e-44ab-8d9e-2aa8794e2fca` |
+| `AZURE_AD_CLIENT_ID` | `c90b1890-870e-47c4-8b89-75b07a5adb1e` |
+| `AZURE_AD_AUDIENCE` | `c90b1890-870e-47c4-8b89-75b07a5adb1e` |
+| `GRAPH_CLIENT_ID` | Same app registration client ID |
+| `GRAPH_TENANT_ID` | Same tenant ID |
+| `GRAPH_CLIENT_SECRET` | Client secret (Certificates & secrets) |
+| `GRAPH_SEND_FROM_EMAIL` | `info@belltec.com` |
+| `ONBOARDING_TEAM_EMAIL` | Distribution list email |
 
-Click **Save**.
-
-### Step 4: Deploy from GitHub
-In Azure Portal → your App Service → **Deployment Center**:
-1. Source: **GitHub**
-2. Sign in to GitHub
-3. Select your repo: `rfi-autofiller`
-4. Branch: `main`
-5. Azure will create a GitHub Actions workflow automatically
-6. Click Save
-
-Every time you push to `main`, it auto-deploys.
-
-### Step 5: Visit your app
-Go to: `https://rfi-autofiller.azurewebsites.net`
+**Note:** Changing env vars triggers a container swap (~1 min downtime).
 
 ---
 
-## Option B: Azure Container Apps (more robust, slightly more setup)
+## Graph API Email Setup
 
-Better if you want auto-scaling or plan to add more services later.
+The app sends emails via Microsoft Graph API (client credentials flow).
 
-### Step 1: Build & push Docker image
+### Prerequisites
+1. `Mail.Send` **application permission** on the app registration
+2. **Admin consent** granted (requires Global Administrator)
+3. **Client secret** generated under Certificates & secrets
+4. Optionally: Application Access Policy to restrict sending to specific mailboxes
+
+### Grant admin consent (CLI)
 ```bash
-# Install Azure CLI if needed
-# brew install azure-cli  (Mac)
-# winget install Microsoft.AzureCLI  (Windows)
-
-az login
-az acr create --resource-group rfi-autofiller-rg --name rfiautofilleracr --sku Basic
-az acr login --name rfiautofilleracr
-
-docker build -t rfiautofilleracr.azurecr.io/rfi-autofiller:latest .
-docker push rfiautofilleracr.azurecr.io/rfi-autofiller:latest
+az ad app permission admin-consent --id c90b1890-870e-47c4-8b89-75b07a5adb1e
 ```
 
-### Step 2: Create Container App
-```bash
-az containerapp create \
-  --name rfi-autofiller \
-  --resource-group rfi-autofiller-rg \
-  --image rfiautofilleracr.azurecr.io/rfi-autofiller:latest \
-  --target-port 8501 \
-  --ingress external \
-  --env-vars \
-    HUBSPOT_API_KEY=your_key \
-    FIREFLIES_API_KEY=your_key \
-    ANTHROPIC_API_KEY=your_key
-```
+### Grant admin consent (Portal)
+App registrations > OnboardingFormFiller > API permissions > Grant admin consent
+
+Without `GRAPH_CLIENT_SECRET`, the app runs in dry-run mode (logs email payload, doesn't send).
 
 ---
 
 ## Troubleshooting
 
 **App won't start?**
-- Check Logs: App Service → Log stream
-- Make sure WEBSITES_PORT=8501 is set
-- Make sure all 3 API keys are set in Configuration
+- Check logs: App Service > Log stream
+- Verify all required env vars are set
 
-**Slow first load?**
-- Streamlit cold-starts can take 10-15 seconds
-- B1 plan keeps the app warm; F1 (free) will sleep after inactivity
+**Deploy stuck?**
+- Check GitHub Actions tab for build errors
+- OIDC deploy is reliable; if issues, check service principal hasn't expired
 
-**Need to update?**
-- Just push to GitHub. Auto-deploys in ~2 minutes.
+**Database issues?**
+- SQLite lives at `/home/onboarding.db` (persistent across restarts)
+- `/home` is the only persistent directory on App Service
+- Migrations run automatically on startup
+
+**Email not sending?**
+- Check `GRAPH_CLIENT_SECRET` is set (otherwise dry-run mode)
+- Verify `Mail.Send` permission has admin consent
+- Check app logs for Graph API error details

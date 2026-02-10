@@ -10,36 +10,48 @@
 
 ## HubSpot API
 
-1. **Legacy API keys are deprecated** — Must use Private App tokens (format: `pat-na1-...`). Create at Settings → Integrations → Private Apps.
+1. **Legacy API keys are deprecated** — Must use Private App tokens (format: `pat-na1-...`). Create at Settings > Integrations > Private Apps.
 
 2. **Required scopes for Private App**: `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read`
 
 3. **Pipeline filtering** — Use `filterGroups` in search body to filter by pipeline name (e.g., "Outside Sales").
 
-## Streamlit
+4. **Owner lookup** — `crm.objects.owners.read` scope is needed for `get_owner_email()`. Without it, owner lookups return 403.
 
-1. **Enter key submission** — Wrap inputs in `st.form()` with `st.form_submit_button()` to enable Enter key.
+## Azure AD / MSAL
 
-2. **Session state for caching** — Use `None` vs `[]` to distinguish "not searched yet" from "searched but empty results".
+1. **Token version** — `requestedAccessTokenVersion` defaults to null (v1). Set to 2 for v2. Backend accepts both formats.
 
-3. **Back button preservation** — Don't clear session state on back navigation; only clear when selecting a NEW item.
+2. **MSAL v5** — Requires explicit `initialize()` before any operations. Use redirect flow, not popup.
 
-4. **Custom theming** — Use `.streamlit/config.toml` for colors, and `st.markdown()` with `<style>` tags for advanced CSS.
+3. **Application permissions** — `Mail.Send` and other high-privilege permissions require Global Administrator to grant admin consent. Application Administrator role is not sufficient.
 
-## Python Compatibility
-
-1. **Type hints `str | None`** — Requires Python 3.10+ OR `from __future__ import annotations` at top of file for older versions.
+4. **SMTP AUTH** — Disabled by default on M365 tenants. Server won't even advertise AUTH capability. Requires Exchange Admin to enable.
 
 ## Azure Deployment
 
-1. **Port must match** — Startup command port and `WEBSITES_PORT` env var must both be `8501` for Streamlit.
+1. **Persistent storage** — Only `/home` survives restarts on App Service. SQLite DB must live there.
 
-2. **SCM Basic Auth** — Must be enabled in Azure for zip deploy to work.
+2. **OIDC deploy** — More reliable than SCM basic auth. Use service principal with federated credentials.
 
-3. **Don't install in startup command** — Dependencies should install during build phase, not startup (too slow).
+3. **Env var changes** — Trigger container swap, can kill in-flight requests. Plan accordingly.
 
-## Workflow
+4. **Deploy time** — ~10 min total (1 min build, 9 min deploy). Don't wait for it.
 
-1. **Test locally first** — Don't push to Azure until all features are working locally.
+## Python
 
-2. **Debug with print statements** — Add them liberally, then remove before committing.
+1. **Type hints `str | None`** — Use `Optional[str]` in SQLAlchemy `Mapped[]` annotations for Python 3.9 compat. Pydantic v2 with `from __future__ import annotations` handles `str | None` fine.
+
+## Frontend
+
+1. **TypeScript strict mode** — Use `import type` for type-only imports (verbatimModuleSyntax).
+
+2. **Tailwind v4** — Use `@import "tailwindcss"` not directives. Via `@tailwindcss/vite` plugin.
+
+3. **Auth headers on downloads** — `<a href>` anchor tags don't send Authorization headers. Use axios with `responseType: 'blob'` + programmatic download instead.
+
+## Extraction
+
+1. **Parallelism** — 2 workers is optimal. 4 causes 429 rate limits from Anthropic.
+
+2. **Prompt design** — Distinguish prospect's current state vs MSP recommendations. Claude sometimes conflates what the client has with what Bellwether plans to provide.
