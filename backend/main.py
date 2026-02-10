@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from backend.database import init_db
-from backend.routes import deals, transcripts, extraction, exports, auth_routes
+from backend.routes import deals, transcripts, extraction, exports, auth_routes, email
 
 
 @asynccontextmanager
@@ -45,6 +45,7 @@ app.include_router(deals.router, prefix="/api/deals", tags=["deals"])
 app.include_router(transcripts.router, prefix="/api/transcripts", tags=["transcripts"])
 app.include_router(extraction.router, prefix="/api/runs", tags=["runs"])
 app.include_router(exports.router, prefix="/api/runs", tags=["exports"])
+app.include_router(email.router, prefix="/api/runs", tags=["email"])
 
 
 @app.get("/api/health")

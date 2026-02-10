@@ -115,6 +115,7 @@ async def list_runs(
             "stats": json.loads(r.stats_json) if r.stats_json else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            "email_sent_at": r.email_sent_at.isoformat() if r.email_sent_at else None,
         }
         for r in runs
     ]

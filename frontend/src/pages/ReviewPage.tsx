@@ -173,7 +173,12 @@ export default function ReviewPage() {
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3 justify-end">
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3 justify-end items-center">
+        {run.email_sent_at && (
+          <span className="text-xs text-green-600 mr-auto">
+            Sent {new Date(run.email_sent_at).toLocaleString()}
+          </span>
+        )}
         <button
           onClick={() =>
             navigate('/gather', {
@@ -196,9 +201,15 @@ export default function ReviewPage() {
         </button>
         <button
           onClick={() => downloadExcel(run.id)}
-          className="rounded-lg bg-[#1E4488] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298]"
+          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Download Excel
+        </button>
+        <button
+          onClick={() => navigate(`/send/${run.id}`)}
+          className="rounded-lg bg-[#F78E28] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#e07d1e]"
+        >
+          Send to Account Team
         </button>
       </div>
     </div>

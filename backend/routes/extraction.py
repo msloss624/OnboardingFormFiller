@@ -126,6 +126,8 @@ async def get_run(run_id: str, _user=Depends(get_current_user), db: AsyncSession
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "error_message": run.error_message,
+        "email_sent_at": run.email_sent_at.isoformat() if run.email_sent_at else None,
+        "email_sent_by": run.email_sent_by,
     }
 
 

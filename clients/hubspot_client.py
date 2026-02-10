@@ -243,6 +243,16 @@ class HubSpotClient:
         except Exception:
             return None
 
+    def get_owner_email(self, owner_id: str) -> str | None:
+        """Get the email address of a HubSpot owner by ID."""
+        try:
+            resp = self.client.get(f"/crm/v3/owners/{owner_id}")
+            if resp.status_code != 200:
+                return None
+            return resp.json().get("email") or None
+        except Exception:
+            return None
+
     # ── Deals (detail) ────────────────────────────────────────────────
 
     def get_deal_properties(self, deal_id: str) -> dict:
@@ -278,13 +288,22 @@ class HubSpotClient:
         company.contacts = contacts
 
         close_date = deal_props.get("closedate")
+        deal_amount = deal_props.get("amount")
+        owner_id = deal_props.get("hubspot_owner_id")
+        deal_owner = None
+        deal_owner_email = None
+        if owner_id:
+            deal_owner = self.get_owner_name(owner_id)
+            deal_owner_email = self.get_owner_email(owner_id)
 
         return {
             "company": company,
             "contacts": contacts,
             "notes": notes,
             "client_domain": company.client_domain,
-            "deal_owner": None,
+            "deal_owner": deal_owner,
+            "deal_owner_email": deal_owner_email,
+            "deal_amount": deal_amount,
             "close_date": close_date,
         }
 

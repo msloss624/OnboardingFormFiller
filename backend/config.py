@@ -29,10 +29,12 @@ class Config:
     azure_ad_tenant_id: Optional[str] = None
     azure_ad_client_id: Optional[str] = None
     azure_ad_audience: Optional[str] = None
-    # Graph API (future)
+    # Graph API — email sending
     graph_client_id: Optional[str] = None
     graph_tenant_id: Optional[str] = None
     graph_client_secret: Optional[str] = None
+    graph_send_from_email: Optional[str] = None
+    onboarding_team_email: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -51,6 +53,8 @@ class Config:
             graph_client_id=os.environ.get("GRAPH_CLIENT_ID"),
             graph_tenant_id=os.environ.get("GRAPH_TENANT_ID"),
             graph_client_secret=os.environ.get("GRAPH_CLIENT_SECRET"),
+            graph_send_from_email=os.environ.get("GRAPH_SEND_FROM_EMAIL"),
+            onboarding_team_email=os.environ.get("ONBOARDING_TEAM_EMAIL"),
         )
 
 

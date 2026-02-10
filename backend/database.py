@@ -41,7 +41,19 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
-    """Create all tables. Called once at startup."""
+    """Create all tables and run lightweight migrations."""
     from backend import models  # noqa: F401 — register models
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Lightweight column migrations for existing tables
+    _migrations = [
+        "ALTER TABLE runs ADD COLUMN email_sent_at DATETIME",
+        "ALTER TABLE runs ADD COLUMN email_sent_by VARCHAR(255)",
+    ]
+    async with get_engine().begin() as conn:
+        for sql in _migrations:
+            try:
+                await conn.execute(__import__("sqlalchemy").text(sql))
+            except Exception:
+                pass  # Column already exists

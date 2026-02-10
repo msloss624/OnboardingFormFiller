@@ -114,9 +114,9 @@ RFI_FIELDS: list[RFIField] = [
     ),
     RFIField(
         row=10, key="desired_go_live",
-        question="Desired go-live date?",
+        question="Onboarding start date?",
         category=Category.ENGAGEMENT,
-        extraction_hint="Go-live date, start date, launch date, target date, when do they want to start. Go-live = when we begin supporting them. Onboarding starts ~30 days before go-live",
+        extraction_hint="Onboarding start date, go-live date, start date, launch date, target date, when do they want to start",
         primary_sources=[Source.HUBSPOT, Source.TRANSCRIPT],
         hubspot_property="closedate",
     ),

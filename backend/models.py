@@ -52,6 +52,8 @@ class Run(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_sent_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     user: Mapped[Optional["User"]] = relationship(back_populates="runs")
 

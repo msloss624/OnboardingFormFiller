@@ -4,6 +4,7 @@ import SearchPage from './pages/SearchPage';
 import GatherPage from './pages/GatherPage';
 import ExtractingPage from './pages/ExtractingPage';
 import ReviewPage from './pages/ReviewPage';
+import SendEmailPage from './pages/SendEmailPage';
 import HistoryPage from './pages/HistoryPage';
 
 const steps = [
@@ -11,6 +12,7 @@ const steps = [
   { path: '/gather', label: 'Gather Data' },
   { path: '/extracting', label: 'Extract' },
   { path: '/review', label: 'Review & Export' },
+  { path: '/send', label: 'Send' },
 ];
 
 function StepIndicator() {
@@ -71,6 +73,7 @@ function Layout() {
           <Route path="/gather" element={<GatherPage />} />
           <Route path="/extracting/:runId" element={<ExtractingPage />} />
           <Route path="/review/:runId" element={<ReviewPage />} />
+          <Route path="/send/:runId" element={<SendEmailPage />} />
           <Route path="/history" element={<HistoryPage />} />
         </Routes>
       </main>

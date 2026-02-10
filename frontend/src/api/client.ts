@@ -94,6 +94,29 @@ export async function uploadFile(file: File) {
   return data as { filename: string; text: string };
 }
 
+export async function getEmailPreview(runId: string) {
+  const { data } = await api.get(`/runs/${runId}/email-preview`);
+  return data as EmailPreview;
+}
+
+export async function sendToAccountTeam(
+  runId: string,
+  subject: string,
+  recipients: string[],
+  fields: Record<string, string>,
+  sow?: File,
+  msa?: File,
+) {
+  const form = new FormData();
+  form.append('subject', subject);
+  form.append('recipients', recipients.join(','));
+  form.append('fields_json', JSON.stringify(fields));
+  if (sow) form.append('sow', sow);
+  if (msa) form.append('msa', msa);
+  const { data } = await api.post(`/runs/${runId}/send-email`, form);
+  return data as { status: string; email_sent_at: string; recipients: string[] };
+}
+
 export async function downloadExcel(runId: string) {
   const { data, headers } = await api.get(`/runs/${runId}/excel`, {
     responseType: 'blob',
@@ -183,6 +206,8 @@ export interface Run {
   created_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  email_sent_at: string | null;
+  email_sent_by: string | null;
 }
 
 export interface RunStats {
@@ -201,6 +226,14 @@ export interface RunSummary {
   stats: RunStats | null;
   created_at: string | null;
   completed_at: string | null;
+  email_sent_at: string | null;
+}
+
+export interface EmailPreview {
+  subject: string;
+  fields: Record<string, string>;
+  recipients: string[];
+  email_sent_at: string | null;
 }
 
 export interface CreateRunRequest {
