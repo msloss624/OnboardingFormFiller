@@ -1,5 +1,4 @@
-# Existing
-streamlit>=1.30
+# Core
 anthropic>=0.40
 httpx>=0.27
 openpyxl>=3.1
