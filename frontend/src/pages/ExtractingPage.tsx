@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRun, type Run } from '../api/client';
+import Spinner from '../components/ui/Spinner';
+import Button from '../components/ui/Button';
 
 export default function ExtractingPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -32,8 +34,8 @@ export default function ExtractingPage() {
     <div className="flex flex-col items-center justify-center py-20 text-center">
       {(!run || run.status === 'pending' || run.status === 'extracting') && (
         <>
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#1E4488] border-t-transparent mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Extracting Answers</h2>
+          <Spinner size="lg" className="mb-4" />
+          <h2 className="font-heading text-2xl text-gray-900 mb-2">Extracting Answers</h2>
           <p className="text-gray-500 text-sm">
             Claude is reading transcripts and extracting answers...
           </p>
@@ -47,14 +49,11 @@ export default function ExtractingPage() {
       {run?.status === 'failed' && (
         <>
           <div className="text-red-500 text-4xl mb-4">!</div>
-          <h2 className="text-xl font-semibold text-red-700 mb-2">Extraction Failed</h2>
+          <h2 className="font-heading text-2xl text-red-700 mb-2">Extraction Failed</h2>
           <p className="text-gray-600 text-sm max-w-md">{run.error_message}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-6 rounded-lg bg-[#1E4488] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298]"
-          >
+          <Button onClick={() => navigate('/')} className="mt-6">
             Back to Search
-          </button>
+          </Button>
         </>
       )}
     </div>

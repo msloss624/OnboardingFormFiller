@@ -1,1 +1,32 @@
 @import "tailwindcss";
+
+@theme {
+  /* Brand colors */
+  --color-bw-blue: #1d4589;
+  --color-bw-blue-light: #2a5a9e;
+  --color-bw-blue-dark: #152f5e;
+  --color-bw-orange: #f78e20;
+  --color-bw-orange-light: #f9a44d;
+  --color-bw-orange-dark: #d97a15;
+
+  /* Semantic aliases */
+  --color-primary: #1d4589;
+  --color-primary-light: #2a5a9e;
+  --color-primary-dark: #152f5e;
+  --color-accent: #f78e20;
+  --color-accent-light: #f9a44d;
+  --color-accent-dark: #d97a15;
+
+  /* Font stacks */
+  --font-heading: 'Abril Fatface', Georgia, serif;
+  --font-body: 'Roboto', system-ui, sans-serif;
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3.font-heading {
+  font-family: var(--font-heading);
+}

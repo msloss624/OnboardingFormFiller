@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { listRuns, downloadExcel, deleteRun, type RunSummary } from '../api/client';
+import { Card } from '../components/ui/Card';
+import Spinner from '../components/ui/Spinner';
 
 export default function HistoryPage() {
   const [searchParams] = useSearchParams();
@@ -18,7 +20,7 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#1E4488] border-t-transparent" />
+        <Spinner />
       </div>
     );
   }
@@ -26,7 +28,7 @@ export default function HistoryPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">
+        <h2 className="font-heading text-2xl text-gray-900">
           Run History {dealId && <span className="text-gray-500 text-base font-normal">(filtered by deal)</span>}
         </h2>
         <button
@@ -40,9 +42,9 @@ export default function HistoryPage() {
       {runs.length === 0 ? (
         <p className="text-gray-500 text-sm py-8 text-center">No runs found.</p>
       ) : (
-        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <Card className="p-0 divide-y divide-gray-100">
           {runs.map((run) => (
-            <div key={run.id} className="flex items-center justify-between px-4 py-4">
+            <div key={run.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-gray-900 truncate">{run.company_name || run.deal_name}</p>
                 <p className="text-sm text-gray-500">
@@ -73,13 +75,13 @@ export default function HistoryPage() {
                   <>
                     <button
                       onClick={() => navigate(`/review/${run.id}`)}
-                      className="text-sm text-[#1E4488] hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
                       Review
                     </button>
                     <button
                       onClick={() => downloadExcel(run.id)}
-                      className="text-sm text-[#F78E28] hover:underline"
+                      className="text-sm text-accent hover:underline"
                     >
                       Download
                     </button>
@@ -98,7 +100,7 @@ export default function HistoryPage() {
               </div>
             </div>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   );

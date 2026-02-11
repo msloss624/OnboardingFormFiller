@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getEmailPreview, sendToAccountTeam } from '../api/client';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Input, Textarea } from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import Spinner from '../components/ui/Spinner';
 
 const CONTRACT_TYPE_OPTIONS = ['Fully Managed', 'Infrastructure', 'Service Desk', 'Security'];
 
@@ -50,7 +54,7 @@ function buildPreviewHtml(fields: Record<string, string>): string {
     }
   }
 
-  const h = 'color:#1E4488;font-size:14px;font-weight:700;margin:20px 0 6px 0';
+  const h = 'color:#1d4589;font-size:14px;font-weight:700;margin:20px 0 6px 0';
 
   return `
 <div style="font-family:Arial,sans-serif;color:#1f2937;line-height:1.6;font-size:14px">
@@ -101,7 +105,6 @@ export default function SendEmailPage() {
       setRecipients(data.recipients);
       setFields(data.fields);
       setSentAt(data.email_sent_at);
-      // Parse comma-separated contract types into the Set
       const ct = data.fields.service_scope || '';
       setContractTypes(new Set(ct.split(',').map((s: string) => s.trim()).filter(Boolean)));
       setLoading(false);
@@ -163,7 +166,7 @@ export default function SendEmailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#1E4488] border-t-transparent" />
+        <Spinner />
       </div>
     );
   }
@@ -177,7 +180,7 @@ export default function SendEmailPage() {
         &larr; Back to Review
       </button>
 
-      <h2 className="text-xl font-bold text-gray-900">Send to Account Team</h2>
+      <h2 className="font-heading text-2xl text-gray-900">Send to Account Team</h2>
 
       {sentAt && (
         <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
@@ -186,18 +189,18 @@ export default function SendEmailPage() {
       )}
 
       {/* Recipients */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Recipients</h3>
-        <div className="flex flex-wrap gap-2">
+      <Card>
+        <CardHeader>Recipients</CardHeader>
+        <div className="flex flex-wrap gap-2 mb-3">
           {recipients.map((email) => (
             <span
               key={email}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
             >
               {email}
               <button
                 onClick={() => removeRecipient(email)}
-                className="ml-1 text-blue-400 hover:text-blue-600"
+                className="ml-1 text-primary/50 hover:text-primary"
               >
                 x
               </button>
@@ -205,39 +208,35 @@ export default function SendEmailPage() {
           ))}
         </div>
         <div className="flex gap-2">
-          <input
+          <Input
             type="email"
             value={newRecipient}
             onChange={(e) => setNewRecipient(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRecipient())}
             placeholder="Add recipient email..."
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:outline-none"
+            className="flex-1"
           />
-          <button
-            onClick={addRecipient}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
+          <Button variant="ghost" size="sm" onClick={addRecipient}>
             Add
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {/* Subject */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
-        <h3 className="text-sm font-semibold text-gray-900">Subject</h3>
-        <input
+      <Card>
+        <CardHeader>Subject</CardHeader>
+        <Input
           type="text"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:outline-none"
         />
-      </div>
+      </Card>
 
       {/* Two-column: Edit fields | Live preview */}
       <div className="grid grid-cols-2 gap-6">
         {/* Left: Editable fields */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-gray-900">Edit Fields</h3>
+        <Card className="space-y-4">
+          <CardHeader>Edit Fields</CardHeader>
           {FIELD_ORDER.map((key) => {
             const isMultiline = key === 'pain_points' || key === 'company_description';
             return (
@@ -253,36 +252,34 @@ export default function SendEmailPage() {
                           type="checkbox"
                           checked={contractTypes.has(opt)}
                           onChange={() => toggleContractType(opt)}
-                          className="rounded border-gray-300"
+                          className="rounded border-gray-300 accent-primary"
                         />
                         {opt}
                       </label>
                     ))}
                   </div>
                 ) : isMultiline ? (
-                  <textarea
+                  <Textarea
                     value={fields[key] || ''}
                     onChange={(e) => updateField(key, e.target.value)}
                     rows={3}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:outline-none"
                   />
                 ) : (
-                  <input
+                  <Input
                     type="text"
                     value={fields[key] || ''}
                     onChange={(e) => updateField(key, e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:outline-none"
                   />
                 )}
               </div>
             );
           })}
-        </div>
+        </Card>
 
         {/* Right: Live email preview */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
-          <h3 className="text-sm font-semibold text-gray-900">Email Preview</h3>
-          <div className="rounded border border-gray-100 bg-gray-50 p-4">
+        <Card className="space-y-2">
+          <CardHeader>Email Preview</CardHeader>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <p className="text-xs text-gray-500 mb-1">
               <strong>To:</strong> {recipients.join(', ') || '(no recipients)'}
             </p>
@@ -294,13 +291,13 @@ export default function SendEmailPage() {
               dangerouslySetInnerHTML={{ __html: buildPreviewHtml(fields) }}
             />
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Attachments */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
-        <p className="text-xs text-gray-500">The onboarding Excel is attached automatically.</p>
+      <Card>
+        <CardHeader>Attachments</CardHeader>
+        <p className="text-xs text-gray-500 mb-3">The onboarding Excel is attached automatically.</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Signed SOW (optional)</label>
@@ -308,7 +305,7 @@ export default function SendEmailPage() {
               type="file"
               accept=".pdf,.docx,.doc"
               onChange={(e) => setSowFile(e.target.files?.[0] || null)}
-              className="text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-gray-200 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-gray-300"
+              className="text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
             />
             {sowFile && <p className="text-xs text-gray-500 mt-1">{sowFile.name}</p>}
           </div>
@@ -318,12 +315,12 @@ export default function SendEmailPage() {
               type="file"
               accept=".pdf,.docx,.doc"
               onChange={(e) => setMsaFile(e.target.files?.[0] || null)}
-              className="text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-gray-200 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-gray-300"
+              className="text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
             />
             {msaFile && <p className="text-xs text-gray-500 mt-1">{msaFile.name}</p>}
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Error */}
       {sendError && (
@@ -333,20 +330,18 @@ export default function SendEmailPage() {
       )}
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3 justify-end">
-        <button
-          onClick={() => navigate(`/review/${runId}`)}
-          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] p-4 -mx-4 flex gap-3 justify-end">
+        <Button variant="ghost" onClick={() => navigate(`/review/${runId}`)}>
           Back to Review
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="accent"
           onClick={handleSend}
-          disabled={sending || recipients.length === 0}
-          className="rounded-lg bg-[#F78E28] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#e07d1e] disabled:opacity-50"
+          loading={sending}
+          disabled={recipients.length === 0}
         >
-          {sending ? 'Sending...' : 'Send Email'}
-        </button>
+          Send Email
+        </Button>
       </div>
     </div>
   );

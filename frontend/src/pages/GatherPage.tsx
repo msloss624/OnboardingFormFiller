@@ -12,6 +12,10 @@ import {
   type Transcript,
 } from '../api/client';
 import TranscriptCheckbox from '../components/TranscriptCheckbox';
+import Button from '../components/ui/Button';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Input, Textarea } from '../components/ui/Input';
+import Spinner from '../components/ui/Spinner';
 
 export default function GatherPage() {
   const location = useLocation();
@@ -51,7 +55,6 @@ export default function GatherPage() {
         const ts = await searchTranscripts(ctx.client_domain, emails);
         ts.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
         setTranscripts(ts);
-        // Select all by default
         setSelectedIds(new Set(ts.map((t) => t.id)));
       } else {
         setTranscripts([]);
@@ -79,7 +82,7 @@ export default function GatherPage() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    e.target.value = ''; // reset so the same file can be re-selected
+    e.target.value = '';
     setUploading(true);
     try {
       const result = await uploadFile(file);
@@ -96,7 +99,6 @@ export default function GatherPage() {
     const url = pasteUrl.trim();
     if (!url) return;
 
-    // Parse transcript ID from URL like https://app.fireflies.ai/view/Title::TRANSCRIPT_ID
     const parts = url.split('::');
     if (parts.length < 2) {
       setPasteError('Invalid URL — expected format: https://app.fireflies.ai/view/...::TRANSCRIPT_ID');
@@ -104,7 +106,6 @@ export default function GatherPage() {
     }
     const transcriptId = parts[parts.length - 1];
 
-    // Check for duplicate
     if (transcripts?.some((t) => t.id === transcriptId)) {
       setPasteError('This transcript is already in the list.');
       return;
@@ -158,7 +159,7 @@ export default function GatherPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#1E4488] border-t-transparent" />
+        <Spinner />
         <span className="ml-3 text-gray-600">Loading deal data...</span>
       </div>
     );
@@ -172,14 +173,12 @@ export default function GatherPage() {
         &larr; Back to Search
       </button>
 
-      <h2 className="text-xl font-bold text-gray-900">Gathering Data: {deal.name}</h2>
+      <h2 className="font-heading text-2xl text-gray-900">Gathering Data: {deal.name}</h2>
 
       {/* HubSpot Context */}
       {company && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h3 className="font-semibold text-[#1E4488] border-b-2 border-[#F78E28] pb-2 mb-3">
-            HubSpot Data
-          </h3>
+        <Card>
+          <CardHeader>HubSpot Data</CardHeader>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Company</p>
@@ -208,14 +207,12 @@ export default function GatherPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Transcripts */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="font-semibold text-[#1E4488] border-b-2 border-[#F78E28] pb-2 mb-3">
-          Fireflies Transcripts ({transcripts?.length || 0} found)
-        </h3>
+      <Card>
+        <CardHeader>Fireflies Transcripts ({transcripts?.length || 0} found)</CardHeader>
         {transcripts && transcripts.length > 0 ? (
           <div className="space-y-2">
             <label className="flex items-center gap-2 pb-2 border-b border-gray-100 cursor-pointer">
@@ -225,7 +222,7 @@ export default function GatherPage() {
                 onChange={(e) =>
                   setSelectedIds(e.target.checked ? new Set(transcripts.map((t) => t.id)) : new Set())
                 }
-                className="h-4 w-4 rounded border-gray-300 text-[#1E4488]"
+                className="h-4 w-4 rounded border-gray-300 text-primary accent-primary"
               />
               <span className="text-sm font-medium text-gray-700">
                 {selectedIds.size === transcripts.length ? 'Deselect all' : 'Select all'}
@@ -252,43 +249,43 @@ export default function GatherPage() {
         <div className="mt-3 pt-3 border-t border-gray-100">
           <label className="block text-sm text-gray-600 mb-1">Add transcript by Fireflies URL</label>
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={pasteUrl}
               onChange={(e) => { setPasteUrl(e.target.value); setPasteError(''); }}
               placeholder="https://app.fireflies.ai/view/Meeting-Title::TRANSCRIPT_ID"
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
+              className="flex-1"
             />
-            <button
+            <Button
               onClick={handleAddByUrl}
-              disabled={pasteLoading || !pasteUrl.trim()}
-              className="rounded-md bg-[#1E4488] px-4 py-2 text-sm font-medium text-white hover:bg-[#2a5298] disabled:opacity-50"
+              disabled={!pasteUrl.trim()}
+              loading={pasteLoading}
+              size="sm"
             >
-              {pasteLoading ? 'Adding...' : 'Add'}
-            </button>
+              Add
+            </Button>
           </div>
           {pasteError && (
             <p className="text-sm text-red-600 mt-1">{pasteError}</p>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Additional content */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="font-semibold text-gray-700 mb-2">Additional Sources (optional)</h3>
-        <textarea
+      <Card>
+        <CardHeader className="normal-case tracking-normal text-base">Additional Sources (optional)</CardHeader>
+        <Textarea
           value={additionalText}
           onChange={(e) => setAdditionalText(e.target.value)}
           placeholder="Paste any additional text, meeting notes, or other relevant content..."
           rows={4}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
         />
 
         <div className="mt-3">
-          <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+          <label className="inline-flex items-center gap-2 cursor-pointer rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
             {uploading ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#1E4488] border-t-transparent" />
+                <Spinner size="sm" />
                 Extracting text...
               </>
             ) : (
@@ -330,41 +327,38 @@ export default function GatherPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Manual fields */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="font-semibold text-gray-700 mb-2">Client Details</h3>
+      <Card>
+        <CardHeader>Client Details</CardHeader>
         <p className="text-xs text-gray-500 mb-3">These fields are filled by the person running the form.</p>
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Account Team</label>
-            <input
+            <Input
               type="text"
               value={manualFields.bellwether_team}
               onChange={(e) => setManualFields((p) => ({ ...p, bellwether_team: e.target.value }))}
               placeholder="e.g. John Smith (AE), Jane Doe (TA)"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
             />
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">Number of Users</label>
-            <input
+            <Input
               type="text"
               value={manualFields.number_of_users}
               onChange={(e) => setManualFields((p) => ({ ...p, number_of_users: e.target.value }))}
               placeholder="e.g. 45"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
             />
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">Number of Machines</label>
-            <input
+            <Input
               type="text"
               value={manualFields.number_of_devices}
               onChange={(e) => setManualFields((p) => ({ ...p, number_of_devices: e.target.value }))}
               placeholder="e.g. 50"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
             />
           </div>
         </div>
@@ -383,30 +377,28 @@ export default function GatherPage() {
                       return next;
                     })
                   }
-                  className="h-4 w-4 rounded border-gray-300 text-[#1E4488]"
+                  className="h-4 w-4 rounded border-gray-300 text-primary accent-primary"
                 />
                 <span className="text-sm text-gray-700">{opt}</span>
               </label>
             ))}
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Actions */}
       <div className="flex gap-3">
-        <button
-          onClick={() => navigate('/')}
-          className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
+        <Button variant="ghost" onClick={() => navigate('/')}>
           &larr; Back
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="accent"
           onClick={handleSubmit}
-          disabled={submitting}
-          className="flex-1 rounded-lg bg-[#1E4488] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298] disabled:opacity-50"
+          loading={submitting}
+          className="flex-1"
         >
-          {submitting ? 'Starting...' : 'Generate Form'}
-        </button>
+          Generate Form
+        </Button>
       </div>
     </div>
   );

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRun, updateAnswers, downloadExcel, retryField, type Run, type Answer } from '../api/client';
 import AnswerEditor from '../components/AnswerEditor';
+import { Card } from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Spinner from '../components/ui/Spinner';
 
 // Field categories in display order
 const CATEGORIES = [
@@ -91,7 +94,7 @@ export default function ReviewPage() {
   if (!run) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#1E4488] border-t-transparent" />
+        <Spinner />
       </div>
     );
   }
@@ -114,23 +117,23 @@ export default function ReviewPage() {
         &larr; Back to Search
       </button>
 
-      <h2 className="text-xl font-bold text-gray-900">Review: {run.company_name || run.deal_name}</h2>
+      <h2 className="font-heading text-2xl text-gray-900">Review: {run.company_name || run.deal_name}</h2>
 
       {/* Stats bar */}
       <div className="grid grid-cols-5 gap-4">
         {[
-          { label: 'Total', value: total, sub: '' },
-          { label: 'Filled', value: filled, sub: `${total ? Math.round((filled / total) * 100) : 0}%` },
-          { label: 'High Confidence', value: high, sub: '' },
-          { label: 'Medium Confidence', value: medium, sub: '' },
-          { label: 'Missing', value: missing, sub: '' },
+          { label: 'Total', value: total, sub: '', accent: false },
+          { label: 'Filled', value: filled, sub: `${total ? Math.round((filled / total) * 100) : 0}%`, accent: true },
+          { label: 'High Confidence', value: high, sub: '', accent: false },
+          { label: 'Medium Confidence', value: medium, sub: '', accent: false },
+          { label: 'Missing', value: missing, sub: '', accent: false },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg bg-gray-50 p-3 text-center">
-            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
+          <Card key={s.label} className={`p-3 text-center ${s.accent ? 'border-accent bg-accent/5' : ''}`}>
+            <p className={`text-2xl font-bold ${s.accent ? 'text-accent-dark' : 'text-gray-900'}`}>{s.value}</p>
             <p className="text-xs text-gray-500">
-              {s.label} {s.sub && <span className="text-[#1E4488]">{s.sub}</span>}
+              {s.label} {s.sub && <span className="text-accent font-semibold">{s.sub}</span>}
             </p>
-          </div>
+          </Card>
         ))}
       </div>
 
@@ -141,10 +144,10 @@ export default function ReviewPage() {
           const isOpen = openCategories.has(name);
 
           return (
-            <div key={name} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <Card key={name} className="p-0 overflow-hidden border-l-4 border-l-accent">
               <button
                 onClick={() => toggleCategory(name)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50"
+                className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-gray-50"
               >
                 <span className="font-semibold text-gray-900">
                   {name}{' '}
@@ -155,7 +158,7 @@ export default function ReviewPage() {
                 <span className="text-gray-400">{isOpen ? '−' : '+'}</span>
               </button>
               {isOpen && (
-                <div className="border-t border-gray-100 px-4 py-2">
+                <div className="border-t border-gray-100 px-5 py-2">
                   {catAnswers.map((a) => (
                     <AnswerEditor
                       key={a.field_key}
@@ -167,19 +170,20 @@ export default function ReviewPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3 justify-end items-center">
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] p-4 -mx-4 flex gap-3 justify-end items-center">
         {run.email_sent_at && (
           <span className="text-xs text-green-600 mr-auto">
             Sent {new Date(run.email_sent_at).toLocaleString()}
           </span>
         )}
-        <button
+        <Button
+          variant="ghost"
           onClick={() =>
             navigate('/gather', {
               state: {
@@ -188,29 +192,18 @@ export default function ReviewPage() {
               },
             })
           }
-          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Re-run with more data
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Edits'}
-        </button>
-        <button
-          onClick={() => downloadExcel(run.id)}
-          className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
+        </Button>
+        <Button variant="ghost" onClick={handleSave} loading={saving}>
+          Save Edits
+        </Button>
+        <Button variant="ghost" onClick={() => downloadExcel(run.id)}>
           Download Excel
-        </button>
-        <button
-          onClick={() => navigate(`/send/${run.id}`)}
-          className="rounded-lg bg-[#F78E28] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#e07d1e]"
-        >
+        </Button>
+        <Button variant="accent" onClick={() => navigate(`/send/${run.id}`)}>
           Send to Account Team
-        </button>
+        </Button>
       </div>
     </div>
   );

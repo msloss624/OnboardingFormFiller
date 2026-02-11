@@ -96,13 +96,14 @@ class HubSpotClient:
                     },
                     {
                         "propertyName": "dealstage",
-                        "operator": "NEQ",
-                        "value": "12660608",
-                    },
-                    {
-                        "propertyName": "dealstage",
-                        "operator": "NEQ",
-                        "value": "8355557",
+                        "operator": "IN",
+                        "values": [
+                            "1986314",       # QFTA Completed
+                            "1232976549",    # Deal Review
+                            "contractsent",  # Quoted
+                            "closedwon",     # Won
+                            "12660608",      # Past Wins
+                        ],
                     },
                 ]
             }]

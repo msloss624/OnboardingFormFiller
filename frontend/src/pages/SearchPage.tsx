@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { searchDeals, listRuns, deleteRun, type Deal, type RunSummary } from '../api/client';
 import DealCard from '../components/DealCard';
+import Button from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
 
 export default function SearchPage() {
   const navigate = useNavigate();
@@ -35,26 +38,24 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-6">
+      <h2 className="font-heading text-2xl text-primary">Find a Deal</h2>
+
       <form onSubmit={handleSearch} className="flex gap-3">
-        <input
+        <Input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search HubSpot deals by company name..."
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#1E4488] focus:ring-1 focus:ring-[#1E4488] focus:outline-none"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-lg bg-[#1E4488] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#2a5298] disabled:opacity-50"
-        >
-          {loading ? 'Searching...' : 'Search'}
-        </button>
+        <Button type="submit" loading={loading}>
+          Search
+        </Button>
       </form>
 
       {deals.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Results</h2>
+          <h3 className="text-lg font-semibold text-gray-900">Results</h3>
           {deals.map((deal) => (
             <DealCard key={deal.id} deal={deal} onSelect={handleSelect} />
           ))}
@@ -67,10 +68,10 @@ export default function SearchPage() {
 
       {recentRuns.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Runs</h2>
-          <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+          <h3 className="text-lg font-semibold text-gray-900">Recent Runs</h3>
+          <Card className="p-0 divide-y divide-gray-100">
             {recentRuns.slice(0, 10).map((run) => (
-              <div key={run.id} className="flex items-center justify-between px-4 py-3">
+              <div key={run.id} className="flex items-center justify-between px-5 py-3">
                 <div>
                   <p className="font-medium text-gray-900">{run.deal_name}</p>
                   <p className="text-xs text-gray-500">
@@ -83,7 +84,7 @@ export default function SearchPage() {
                   {run.status === 'completed' && (
                     <button
                       onClick={() => navigate(`/review/${run.id}`)}
-                      className="text-sm text-[#1E4488] hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
                       View
                     </button>
@@ -101,7 +102,7 @@ export default function SearchPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import AuthProvider from './auth/MsalProvider';
+import { useMsal } from '@azure/msal-react';
+import AuthProvider, { isAuthEnabled } from './auth/MsalProvider';
 import SearchPage from './pages/SearchPage';
 import GatherPage from './pages/GatherPage';
 import ExtractingPage from './pages/ExtractingPage';
@@ -17,57 +18,75 @@ const steps = [
 
 function StepIndicator() {
   const location = useLocation();
+  const isHistory = location.pathname === '/history';
   const currentIdx = steps.findIndex((s) =>
     s.path === '/' ? location.pathname === '/' : location.pathname.startsWith(s.path)
   );
 
+  if (isHistory) return null;
+
   return (
-    <div className="flex items-center justify-center gap-0 py-4">
-      {steps.map((step, i) => {
-        const isCompleted = i < currentIdx;
-        const isActive = i === currentIdx;
-        return (
-          <div key={step.path} className="flex items-center">
-            <div className={`flex items-center gap-2 px-3 py-1 text-sm ${
-              isCompleted ? 'text-green-600' : isActive ? 'text-[#1E4488] font-semibold' : 'text-gray-400'
-            }`}>
-              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-[#1E4488] text-white' : 'bg-gray-200 text-gray-500'
+    <div className="bg-white border-b border-gray-200">
+      <div className="max-w-6xl mx-auto flex items-center justify-center gap-0 py-3">
+        {steps.map((step, i) => {
+          const isCompleted = i < currentIdx;
+          const isActive = i === currentIdx;
+          return (
+            <div key={step.path} className="flex items-center">
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm transition-colors ${
+                isCompleted ? 'text-accent-dark' : isActive ? 'text-primary font-semibold' : 'text-gray-400'
               }`}>
-                {isCompleted ? '\u2713' : i + 1}
-              </span>
-              {step.label}
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                  isCompleted ? 'bg-accent text-white' : isActive ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {isCompleted ? '\u2713' : i + 1}
+                </span>
+                {step.label}
+              </div>
+              {i < steps.length - 1 && (
+                <div className={`mx-3 h-0.5 w-14 transition-colors ${
+                  isCompleted ? 'bg-accent' : isActive ? 'bg-primary' : 'bg-gray-200'
+                }`} />
+              )}
             </div>
-            {i < steps.length - 1 && (
-              <div className={`mx-2 h-0.5 w-10 ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+function UserName() {
+  if (!isAuthEnabled) return null;
+  const { accounts } = useMsal();
+  const name = accounts[0]?.name?.split(' ')[0];
+  if (!name) return null;
+  return <span className="text-sm text-white/75">{name}</span>;
 }
 
 function Layout() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#1E4488] to-[#2a5298] text-white px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Onboarding Form Filler</h1>
-            <p className="text-sm text-white/75">Auto-fill onboarding forms from HubSpot deals and Fireflies transcripts</p>
+      <header className="bg-bw-blue text-white px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/bellwether-logo.png" alt="Bellwether" className="h-9 w-9" />
+            <h1 className="font-heading text-xl tracking-wide">Onboarding Form Filler</h1>
           </div>
-          <Link to="/history" className="text-sm text-white/75 hover:text-white">
-            History
-          </Link>
+          <div className="flex items-center gap-4">
+            <UserName />
+            <Link to="/history" className="text-sm text-white/75 hover:text-white transition-colors">
+              History
+            </Link>
+          </div>
         </div>
       </header>
 
       <StepIndicator />
 
       {/* Main content */}
-      <main className="max-w-5xl mx-auto px-4 pb-12">
+      <main className="max-w-6xl mx-auto px-4 py-8 pb-12">
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/gather" element={<GatherPage />} />
