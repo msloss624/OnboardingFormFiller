@@ -227,6 +227,7 @@ export interface RunSummary {
   created_at: string | null;
   completed_at: string | null;
   email_sent_at: string | null;
+  created_by: string | null;
 }
 
 export interface EmailPreview {

@@ -7,6 +7,8 @@ import concurrent.futures
 import httpx
 from dataclasses import dataclass, field
 
+from backend.cache import ttl_cache
+
 
 GQL_ENDPOINT = "https://api.fireflies.ai/graphql"
 
@@ -166,6 +168,7 @@ class FirefliesClient:
             for t in data.get("transcripts", [])
         ]
 
+    @ttl_cache(86400)  # 24 hours — transcripts are immutable after creation
     def get_full_transcript(self, transcript_id: str) -> FullTranscript:
         """Retrieve full transcript with all sentences."""
         query = """

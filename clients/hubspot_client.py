@@ -7,6 +7,8 @@ import concurrent.futures
 import httpx
 from dataclasses import dataclass, field
 
+from backend.cache import ttl_cache
+
 
 BASE = "https://api.hubapi.com"
 
@@ -129,6 +131,7 @@ class HubSpotClient:
 
     # ── Companies ────────────────────────────────────────────────────
 
+    @ttl_cache(3600)  # 1 hour
     def get_company(self, company_id: str) -> Company:
         props = "name,domain,city,state,industry,numberofemployees"
         resp = self.client.get(f"/crm/v3/objects/companies/{company_id}", params={"properties": props})
@@ -230,6 +233,7 @@ class HubSpotClient:
 
     # ── Owners ────────────────────────────────────────────────────────
 
+    @ttl_cache(86400)  # 24 hours
     def get_owner_name(self, owner_id: str) -> str | None:
         """Get the display name of a HubSpot owner by ID."""
         try:
@@ -243,6 +247,7 @@ class HubSpotClient:
         except Exception:
             return None
 
+    @ttl_cache(86400)  # 24 hours
     def get_owner_email(self, owner_id: str) -> str | None:
         """Get the email address of a HubSpot owner by ID."""
         try:
@@ -255,6 +260,7 @@ class HubSpotClient:
 
     # ── Deals (detail) ────────────────────────────────────────────────
 
+    @ttl_cache(1800)  # 30 minutes
     def get_deal_properties(self, deal_id: str) -> dict:
         """Fetch deal properties including owner and close date."""
         props = "dealname,dealstage,amount,closedate,hubspot_owner_id"
@@ -264,6 +270,7 @@ class HubSpotClient:
 
     # ── High-level: get everything for a deal ────────────────────────
 
+    @ttl_cache(1800)  # 30 minutes
     def get_deal_context(self, deal_id: str) -> dict:
         """Pull all relevant data for a deal: company info, contacts, notes, owner."""
         # Get associated company

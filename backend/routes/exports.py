@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from backend.auth import get_current_user
 from backend.database import get_db
@@ -98,12 +99,12 @@ async def list_runs(
     _user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Run).order_by(Run.created_at.desc())
+    query = select(Run).options(joinedload(Run.user)).order_by(Run.created_at.desc())
     if deal_id:
         query = query.where(Run.deal_id == deal_id)
 
     result = await db.execute(query)
-    runs = result.scalars().all()
+    runs = result.scalars().unique().all()
 
     return [
         {
@@ -116,6 +117,7 @@ async def list_runs(
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
             "email_sent_at": r.email_sent_at.isoformat() if r.email_sent_at else None,
+            "created_by": (r.user.display_name or r.user.email) if r.user else None,
         }
         for r in runs
     ]

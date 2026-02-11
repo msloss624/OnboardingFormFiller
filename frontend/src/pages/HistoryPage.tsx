@@ -47,6 +47,7 @@ export default function HistoryPage() {
                 <p className="font-medium text-gray-900 truncate">{run.company_name || run.deal_name}</p>
                 <p className="text-sm text-gray-500">
                   {run.created_at && new Date(run.created_at).toLocaleString()}
+                  {run.created_by && <span className="ml-2 text-gray-400">by {run.created_by}</span>}
                 </p>
                 <div className="flex gap-3 mt-1">
                   <span
