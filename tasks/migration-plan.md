@@ -7,7 +7,7 @@
 - **Phase 3: Microsoft SSO (MSAL)** — COMPLETE
 - **Phase 4: React Frontend** — COMPLETE
 - **Phase 5: Extraction Quality + UX** — COMPLETE
-- **Phase 6: Email to Account Team** — COMPLETE (pending Graph API admin consent)
+- **Phase 6: Email to Account Team** — COMPLETE (Graph API live, sends from info@belltec.com)
 
 ## Architecture
 

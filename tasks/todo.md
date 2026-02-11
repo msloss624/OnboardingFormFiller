@@ -21,11 +21,11 @@
 - [x] Legacy Streamlit code cleanup
 
 ## Pending
-- [ ] Graph API admin consent (Global Admin needed)
-- [ ] Generate client secret for Graph API
-- [ ] Set Graph env vars on Azure App Service
-- [ ] Test email sending end-to-end in production
-- [ ] Application Access Policy to restrict Mail.Send to info@belltec.com
+- [x] Graph API admin consent (granted by Corey Crossman, 2026-02-10)
+- [x] Generate client secret for Graph API (created 2026-02-10, expires 2028)
+- [x] Set Graph env vars on Azure App Service (GRAPH_CLIENT_ID, GRAPH_TENANT_ID, GRAPH_CLIENT_SECRET, GRAPH_SEND_FROM_EMAIL)
+- [x] Test email sending end-to-end in production (verified 2026-02-10, sends from info@belltec.com)
+- [ ] Application Access Policy to restrict Mail.Send to info@belltec.com (optional hardening)
 
 ## Future Improvements (deferred)
 - [ ] User ownership checks on runs (when multi-user needed)
