@@ -15,6 +15,10 @@ aiosqlite>=0.20
 # Phase 2: Azure Blob Storage
 azure-storage-blob>=12.0
 
+# Azure Key Vault (secret management in production)
+azure-identity>=1.15
+azure-keyvault-secrets>=4.8
+
 # Phase 3: Azure AD auth
 python-jose[cryptography]>=3.3
 
